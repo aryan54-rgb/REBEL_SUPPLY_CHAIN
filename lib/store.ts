@@ -24,13 +24,14 @@ import {
     buildUpstreamGraph,
 } from "./algorithms";
 import { calculateDistance } from "./distance";
-import { 
-  applyDynamicRiskToNodes,
-  calculateGeographicConcentrationRisk,
-  applyGeographicConcentrationRiskToNodes,
-  getConcentrationWarning,
-  ConcentrationRiskResult,
+import {
+    applyDynamicRiskToNodes,
+    calculateGeographicConcentrationRisk,
+    applyGeographicConcentrationRiskToNodes,
+    getConcentrationWarning,
+    ConcentrationRiskResult,
 } from "./riskEngine";
+import { findAllAlternatives, AlternativeResult } from "./alternativeFinder";
 
 // ── Simulation impact result ───────────────────────────────
 export interface SimulationResult {
@@ -44,6 +45,7 @@ export interface SimulationResult {
     afterAvgRisk: number;
     beforeSpofCount: number;
     afterSpofCount: number;
+    alternatives: AlternativeResult[];
 }
 
 // ── Node analysis row (used on analytics & table pages) ────
@@ -291,17 +293,17 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
         selectNode: (id) => {
             const { nodes, edges } = get();
             if (!id) {
-            set({
-                selectedNodeId: null,
-                selectedNode: null,
-                mitigations: [],
-                cascadingRisk: null,
-                selectedEfficiencyRatio: null,
-                selectedConnectivity: 0,
-                selectedUpstream: [],
-                selectedDownstream: [],
-                selectedDependencies: [],
-            });
+                set({
+                    selectedNodeId: null,
+                    selectedNode: null,
+                    mitigations: [],
+                    cascadingRisk: null,
+                    selectedEfficiencyRatio: null,
+                    selectedConnectivity: 0,
+                    selectedUpstream: [],
+                    selectedDownstream: [],
+                    selectedDependencies: [],
+                });
                 return;
             }
 
@@ -441,6 +443,9 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
                 return had && !has;
             });
 
+            // Find alternative replacements for each disabled node
+            const alternatives = findAllAlternatives(disabledSet, nodes, edges);
+
             set({
                 isSimulating: false,
                 simulationResult: {
@@ -454,6 +459,7 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
                     afterAvgRisk: Math.round(afterAvgRisk * 10) / 10,
                     beforeSpofCount: beforeSpofs.length,
                     afterSpofCount: afterSpofs.length,
+                    alternatives,
                 },
             });
         },
@@ -465,27 +471,27 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
 
         addNodeWithEdges: (newNode, edgeTargets) => {
             const { nodes, edges } = get();
-            
+
             // Safety check for duplicate IDs
             if (nodes.some(n => n.id === newNode.id)) return;
 
             // Add the new node
             const updatedNodes = [...nodes, newNode];
-            
+
             // Decision: Should newNode be source or target?
             // Hierarchy: Tier 4 (Raw) -> Tier 3 (Comp) -> Tier 2 (Mfg) -> Tier 1 (Distr) -> Tier 0 (Retail)
             // Lower Tier number = more downstream.
             // Direction: Higher Tier -> Lower Tier (e.g. 4 -> 3)
-            
+
             const newEdges = edgeTargets.map((targetId) => {
                 const targetNode = nodes.find(n => n.id === targetId);
-                
+
                 // If existing node (targetId) is more downstream (lower tier), 
                 // then NewNode is Source.
                 // If existing node is more upstream (higher tier), 
                 // then ExistingNode is Source.
                 const isNewNodeSource = targetNode ? newNode.tier > targetNode.tier : true;
-                
+
                 return {
                     id: `edge-${newNode.id}-${targetId}-${Date.now()}`,
                     source: isNewNodeSource ? newNode.id : targetId,
@@ -494,9 +500,9 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
                     dependency_weight: 0.5,
                 };
             });
-            
+
             const updatedEdges = [...edges, ...newEdges];
-            
+
             // Update state and recompute analytics
             set({
                 nodes: updatedNodes,
