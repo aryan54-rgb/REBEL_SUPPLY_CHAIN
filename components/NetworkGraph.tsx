@@ -410,6 +410,7 @@ export default function NetworkGraph() {
         selectedDownstream,
         disabledNodeIds,
         filteredNodes,
+        simulationResult,
     } = useSupplyChainStore();
 
     const [isMinimapOpen, setIsMinimapOpen] = useState(true);
@@ -481,7 +482,7 @@ export default function NetworkGraph() {
             }
         }
 
-        return supplyEdges.map((e, i) => {
+        const baseEdges: Edge[] = supplyEdges.map((e, i) => {
             const key = `${e.source}-${e.target}`;
             const isHighlighted = highlightedPairs.has(key);
             const isDisabled =
@@ -522,7 +523,49 @@ export default function NetworkGraph() {
                 type: "custom",
             };
         });
-    }, [supplyEdges, selectedNodeId, selectedUpstream, selectedDownstream, disabledNodeIds, visibleNodeIds]);
+
+        // Add simulated "alternative" edges connecting candidates to the lost downstream nodes
+        const altEdges: Edge[] = [];
+        if (simulationResult?.alternatives) {
+            simulationResult.alternatives.forEach((alt) => {
+                // Find downstream nodes of the disabled node
+                const originalEdges = supplyEdges.filter((e) => e.source === alt.disabledNode.id);
+
+                alt.alternatives.forEach((candidate, idx) => {
+                    // Color gradient: best is Green, then Yellow, then Red
+                    const altColor = idx === 0 ? "#9BFF00" : idx === 1 ? "#FFDF00" : "#FF3333";
+
+                    originalEdges.forEach((origEdge, edgeIdx) => {
+                        altEdges.push({
+                            id: `alt-${candidate.node.id}-${origEdge.target}-${edgeIdx}`,
+                            source: candidate.node.id,
+                            target: origEdge.target,
+                            animated: true,
+                            data: {
+                                dependency_weight: origEdge.dependency_weight,
+                                sourceName: candidate.node.name,
+                                targetName: supplierNodes.find((n) => n.id === origEdge.target)?.name,
+                                sourceId: candidate.node.id,
+                                targetId: origEdge.target,
+                            },
+                            style: {
+                                stroke: altColor,
+                                strokeWidth: 4,
+                                strokeDasharray: "5 5",
+                            },
+                            markerEnd: {
+                                type: MarkerType.ArrowClosed,
+                                color: altColor,
+                            },
+                            type: "custom",
+                        });
+                    });
+                });
+            });
+        }
+
+        return [...baseEdges, ...altEdges];
+    }, [supplyEdges, selectedNodeId, selectedUpstream, selectedDownstream, disabledNodeIds, visibleNodeIds, simulationResult, supplierNodes]);
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edgesState, setEdges, onEdgesChange] = useEdgesState(flowEdges);
