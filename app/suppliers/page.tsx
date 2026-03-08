@@ -5,9 +5,10 @@
 // plus detail sidebar
 // ============================================================
 
-import React from "react";
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import Navigation from "@/components/Navigation";
+import AddSupplierModal from "@/components/AddSupplierModal";
 
 const SupplierTable = dynamic(() => import("@/components/SupplierTable"), {
     ssr: false,
@@ -18,14 +19,11 @@ const MitigationPanel = dynamic(
 );
 
 import { useSupplyChainStore } from "@/lib/store";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Plus } from "lucide-react";
 
 export default function SuppliersPage() {
-    const { selectedNodeId, loadFromApi } = useSupplyChainStore();
-
-    React.useEffect(() => {
-        loadFromApi();
-    }, [loadFromApi]);
+    const { selectedNodeId } = useSupplyChainStore();
+    const [isAddSupplierModalOpen, setIsAddSupplierModalOpen] = useState(false);
 
     return (
         <div
@@ -45,29 +43,54 @@ export default function SuppliersPage() {
                     borderBottom: "3px solid #000",
                     background: "#FFF",
                     padding: "12px 20px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                 }}
             >
-                <h1
+                <div>
+                    <h1
+                        style={{
+                            fontSize: 20,
+                            fontWeight: 900,
+                            letterSpacing: "-0.02em",
+                            margin: 0,
+                        }}
+                    >
+                        Supplier Database
+                    </h1>
+                    <p
+                        style={{
+                            fontSize: 11,
+                            fontFamily: "Roboto Mono, monospace",
+                            opacity: 0.6,
+                            marginTop: 2,
+                        }}
+                    >
+                        Search, filter, and analyze all suppliers. Click a row to view
+                        mitigation details.
+                    </p>
+                </div>
+                <button
+                    onClick={() => setIsAddSupplierModalOpen(true)}
                     style={{
-                        fontSize: 20,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 16px",
+                        background: "#9BFF00",
+                        border: "3px solid #000",
                         fontWeight: 900,
-                        letterSpacing: "-0.02em",
-                        margin: 0,
-                    }}
-                >
-                    Supplier Database
-                </h1>
-                <p
-                    style={{
                         fontSize: 11,
-                        fontFamily: "Roboto Mono, monospace",
-                        opacity: 0.6,
-                        marginTop: 2,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
                     }}
                 >
-                    Search, filter, and analyze all suppliers. Click a row to view
-                    mitigation details.
-                </p>
+                    <Plus size={14} strokeWidth={3} />
+                    Add Supplier
+                </button>
             </div>
 
             <main
@@ -127,6 +150,12 @@ export default function SuppliersPage() {
                     </aside>
                 )}
             </main>
+
+            {/* Add Supplier Modal */}
+            <AddSupplierModal
+                isOpen={isAddSupplierModalOpen}
+                onClose={() => setIsAddSupplierModalOpen(false)}
+            />
         </div>
     );
 }

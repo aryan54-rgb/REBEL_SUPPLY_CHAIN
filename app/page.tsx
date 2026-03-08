@@ -7,7 +7,7 @@
 //   RIGHT-BOTTOM: Mitigation Panel
 // ============================================================
 
-import React from "react";
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import {
   AlertTriangle,
@@ -15,12 +15,16 @@ import {
   Layers,
   ShieldCheck,
   TrendingDown,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { useSupplyChainStore } from "@/lib/store";
 import { TIER_LABELS, TIER_COLORS } from "@/lib/mockData";
 import { FilterControls } from "@/components/FilterControls";
 import Navigation from "@/components/Navigation";
-
+import ConcentrationWarningBanner from "@/components/ConcentrationWarningBanner";
+import GraphLegend from "@/components/GraphLegend";
+import CriticalComponentsCard from "@/components/CriticalComponentsCard";
 const NetworkGraph = dynamic(() => import("@/components/NetworkGraph"), {
   ssr: false,
   loading: () => (
@@ -137,23 +141,19 @@ function TierLegend() {
 }
 
 export default function DashboardPage() {
+  const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
   const {
     networkAnalytics,
     selectedRegion,
     selectedManufacturerId,
     radiusKm,
     filteredNodes,
-    loadFromApi,
   } = useSupplyChainStore();
   const { totalNodes, avgRisk, highRiskCount, spofCount, dangerousDepCount } =
     networkAnalytics;
   const visibleSuppliers = filteredNodes.length;
   const radiusLabel =
     selectedManufacturerId && radiusKm > 0 ? `${radiusKm} km` : "Off";
-
-  React.useEffect(() => {
-    loadFromApi();
-  }, [loadFromApi]);
 
   return (
     <div
@@ -165,15 +165,15 @@ export default function DashboardPage() {
         background: "#F5F5F0",
       }}
     >
-      <Navigation />
+      {!isGraphFullscreen && <Navigation />}
 
       {/* ── Stats strip ───────────────────────────────────── */}
       <div
         style={{
-          borderBottom: "3px solid #000",
+          borderBottom: isGraphFullscreen ? "none" : "3px solid #000",
           background: "#FFF",
-          padding: "10px 16px",
-          display: "flex",
+          padding: isGraphFullscreen ? "0" : "10px 16px",
+          display: isGraphFullscreen ? "none" : "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
@@ -217,35 +217,52 @@ export default function DashboardPage() {
         <TierLegend />
       </div>
 
+      {/* ── Geographic Concentration Warning ──────────────── */}
+      {!isGraphFullscreen && (
+        <div
+          style={{
+            borderBottom: "3px solid #000",
+            background: "#F5F5F0",
+            padding: "12px 16px",
+          }}
+        >
+          <ConcentrationWarningBanner />
+        </div>
+      )}
+
       {/* ── Main content ──────────────────────────────────── */}
       <main
         style={{
           flex: 1,
           display: "grid",
-          gridTemplateColumns: "1fr 400px",
+          gridTemplateColumns: isGraphFullscreen ? "1fr 0px" : "1fr 400px",
           overflow: "hidden",
+          transition: "grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         {/* LEFT: Network Graph (full height) with filter controls */}
         <div
           style={{
-            borderRight: "3px solid #000",
+            borderRight: isGraphFullscreen ? "none" : "3px solid #000",
             position: "relative",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
           }}
         >
-          <div style={{ padding: "8px 12px", borderBottom: "2px solid #000", background: "#FFF" }}>
-            <FilterControls />
-          </div>
-          <div
-            style={{
-              padding: "8px 12px",
-              borderBottom: "2px solid #000",
-              background: "#FFF8D6",
-            }}
-          >
+          {!isGraphFullscreen && (
+            <div style={{ padding: "8px 12px", borderBottom: "2px solid #000", background: "#FFF" }}>
+              <FilterControls />
+            </div>
+          )}
+          {!isGraphFullscreen && (
+            <div
+              style={{
+                padding: "8px 12px",
+                borderBottom: "2px solid #000",
+                background: "#FFF8D6",
+              }}
+            >
             <div
               style={{
                 fontSize: 10,
@@ -273,7 +290,38 @@ export default function DashboardPage() {
               <span>Visible Suppliers = {visibleSuppliers}</span>
             </div>
           </div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
+          )}
+          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+            <div
+              style={{
+                position: "absolute",
+                top: 20,
+                right: 20,
+                zIndex: 50,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 10,
+              }}
+            >
+              <button
+                onClick={() => setIsGraphFullscreen(!isGraphFullscreen)}
+                className="brutal-card bg-white hover:bg-gray-100"
+                style={{
+                  padding: 8,
+                  border: "2px solid #000",
+                  boxShadow: "3px 3px 0px 0px rgba(0,0,0,1)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                title={isGraphFullscreen ? "Exit Fullscreen" : "Fullscreen Graph"}
+              >
+                {isGraphFullscreen ? <Minimize2 size={18} strokeWidth={3} /> : <Maximize2 size={18} strokeWidth={3} />}
+              </button>
+              <GraphLegend />
+            </div>
             <NetworkGraph />
           </div>
         </div>
@@ -283,7 +331,8 @@ export default function DashboardPage() {
           style={{
             display: "flex",
             flexDirection: "column",
-            overflow: "hidden",
+            overflowX: "hidden",
+            overflowY: "auto",
             background: "#FFF",
           }}
         >
@@ -314,8 +363,22 @@ export default function DashboardPage() {
             <RiskCostMatrix />
           </div>
 
+          {/* Critical Components panel */}
+          {!isGraphFullscreen && (
+            <div
+              style={{
+                borderBottom: "3px solid #000",
+                height: "25%",
+                minHeight: 180,
+                position: "relative",
+              }}
+            >
+              <CriticalComponentsCard />
+            </div>
+          )}
+
           {/* Mitigation panel */}
-          <div style={{ flex: 1, overflow: "hidden" }}>
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div
               style={{
                 borderBottom: "3px solid #000",
@@ -338,7 +401,7 @@ export default function DashboardPage() {
                 Mitigation Recommendations
               </span>
             </div>
-            <div style={{ flex: 1, overflow: "hidden", height: "calc(100% - 36px)" }}>
+            <div style={{ flex: 1, overflowY: "auto" }}>
               <MitigationPanel />
             </div>
           </div>

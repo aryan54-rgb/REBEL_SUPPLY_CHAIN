@@ -1,16 +1,16 @@
+// ============================================================
+// Prisma Client Singleton — Prevents multiple instances
+// in development (Hot Module Reloading can create duplicates)
+// ============================================================
+
 import { PrismaClient } from "@prisma/client";
-// import config from "../prisma.config"; // Removed as Prisma 7 handles this automatically
 
-const prismaClientSingleton = () => {
-    return new PrismaClient();
-};
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-declare global {
-    var prisma: undefined | ReturnType<typeof prismaClientSingleton>;
+export const prisma = globalForPrisma.prisma || new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.prisma = prisma;
 }
 
-const prisma = globalThis.prisma ?? prismaClientSingleton();
-
 export default prisma;
-
-if (process.env.NODE_ENV !== "production") globalThis.prisma = prisma;
