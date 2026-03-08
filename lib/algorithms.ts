@@ -179,11 +179,20 @@ export type MitigationType =
     | "shipping"
     | "financial";
 
+export interface AlternativeSupplier {
+    id: string;
+    name: string;
+    country: string;
+    risk_score: number;
+    cost_score: number;
+}
+
 export interface Mitigation {
     type: MitigationType;
     severity: "critical" | "high" | "medium" | "low";
     title: string;
     description: string;
+    alternatives?: AlternativeSupplier[];
 }
 
 export function generateMitigations(
@@ -201,6 +210,29 @@ export function generateMitigations(
     const ratio = efficiencyRatio(node);
     const cascading = calculateCascadingRisk(nodeId, nodes, edges);
 
+    // ── Helper to find alternatives ────────────────────────
+    const findAlternatives = (currentNode: SupplierNode): AlternativeSupplier[] => {
+        return nodes
+            .filter(n => 
+                n.id !== currentNode.id && 
+                n.products === currentNode.products &&
+                n.tier === currentNode.tier
+            )
+            .sort((a, b) => {
+                // Rank by lower risk first, then acceptable cost
+                if (a.risk_score !== b.risk_score) return a.risk_score - b.risk_score;
+                return a.cost_score - b.cost_score;
+            })
+            .slice(0, 3)
+            .map(n => ({
+                id: n.id,
+                name: n.name,
+                country: n.country,
+                risk_score: n.risk_score,
+                cost_score: n.cost_score
+            }));
+    };
+
     // ── SPOF Check ─────────────────────────────────────────
     if (spofs.includes(nodeId)) {
         mitigations.push({
@@ -208,6 +240,7 @@ export function generateMitigations(
             severity: "critical",
             title: "Single Point of Failure Detected",
             description: `"${node.name}" is the sole supplier for one or more downstream nodes. Qualify an alternative supplier in a different region to eliminate this critical dependency.`,
+            alternatives: findAlternatives(node)
         });
     }
 
@@ -216,12 +249,37 @@ export function generateMitigations(
         const pathNames = cascading.risk_path
             .map((id) => nodeMap.get(id)?.name ?? id)
             .join(" → ");
+        
+        // Find the actual high-risk upstream node that is causing the problem
+        const highRiskNodeId = cascading.risk_path[0]; // The root of the risk path
+        const highRiskNode = nodeMap.get(highRiskNodeId);
+
         mitigations.push({
             type: "high_risk",
             severity: cascading.cascading_risk_score > 65 ? "high" : "medium",
             title: "Elevated Cascading Risk Exposure",
             description: `Cascading risk: ${cascading.cascading_risk_score}. Risk propagates via: ${pathNames}. Consider inventory buffers or dual-sourcing the high-risk upstream node.`,
+            alternatives: highRiskNode ? findAlternatives(highRiskNode) : []
         });
+    }
+
+    // ── High Dependency Check (>70%) ──────────────────────
+    const upstream = buildUpstreamGraph(edges);
+    const parents = upstream.get(nodeId) ?? [];
+    for (const parentId of parents) {
+        const edge = edges.find(e => e.source === parentId && e.target === nodeId);
+        if (edge && edge.dependency_weight > 0.7) {
+            const parentNode = nodeMap.get(parentId);
+            if (parentNode) {
+                mitigations.push({
+                    type: "dangerous_dependency",
+                    severity: "high",
+                    title: `High Dependency on ${parentNode.name}`,
+                    description: `You have a ${(edge.dependency_weight * 100).toFixed(0)}% dependency on this supplier. Excessive reliance on a single source increases disruption impact.`,
+                    alternatives: findAlternatives(parentNode)
+                });
+            }
+        }
     }
 
     // ── Dangerous Dependency (low efficiency ratio) ────────
