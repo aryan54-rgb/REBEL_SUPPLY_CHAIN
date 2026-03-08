@@ -1,40 +1,113 @@
-# 🛡️ SUPPLY CHAIN RESILIENCE & RISK ANALYZER
+# Rebel Supply Chain — Supply Chain Resilience & Risk Analyzer
 
-A high-fidelity, advanced frontend platform for analyzing multi-tier supply chain vulnerabilities, detecting single points of failure, simulating cascading disruptions, and automatically finding alternative suppliers.
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/aryan54-rgb/REBEL_SUPPLY_CHAIN/tree/main)
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed_on-Vercel-black?logo=vercel)](https://rebel-supply-chain.vercel.app/)
 
-<img src="https://raw.githubusercontent.com/aryan54-rgb/REBEL_SUPPLY_CHAIN/main/dashboard_screenshot.png" alt="Dashboard Preview">
+## Overview
 
-## 🚀 Overview
+Rebel Supply Chain is an interactive analytics platform designed to map, visualize, simulate, and mitigate risks within complex multi-tier global supply chains.
 
-The Supply Chain Resilience & Risk Analyzer models complex global supply chains as a Directed Acyclic Graph (DAG) using a realistic, built-in 50-node dataset spanning 5 tiers and 6 continents.
+The system focuses on supply chain resilience and risk intelligence, particularly in high-complexity industries like electronics manufacturing. It allows organizations to proactively identify vulnerabilities and simulate disruptions before they impact operations.
 
-Built with a stunning Neo-Brutalist design system, this platform is optimized for **100% frontend execution**, meaning zero database configuration or backend is required. Simply install and simulate!
+The user interface utilizes a striking **Neo-Brutalist design**—featuring bold borders, high contrast, strong typography, and an industrial analytics aesthetic to emphasize clarity and data density.
 
-### Core Capabilities
+## Key Features
 
-- **Interactive Network Graph:** 5-tier DAG layout (Raw Materials → Retailers) beautifully rendered using React Flow, complete with a VS Code style toggleable minimap.
-- **Cascading Risk Engine:** Proprietary algorithm that calculates how failures propagate through the network.
-- **Disruption Simulator:** Powerful "What-if" analysis. Toggle suppliers offline and instantly visualize the downstream impact via animated paths.
-- **Smart Alternative Replacements:** AI-style engine that instantly identifies, ranks, and recommends replacement suppliers (with animated visual links) when a node goes offline.
-- **Rich Mitigation Panel:** Detailed impact analysis showcasing Cost changes (Cost Δ), Risk changes (Risk Δ), and Single Points of Failure.
+1️⃣ **Interactive Supply Chain Graph**  
+Built with React Flow, featuring a multi-tier DAG layout, real-time graph visualization, color-coded supplier tiers, node risk indicators, and component flow visualization.
 
-## 🛠️ Tech Stack
+2️⃣ **Cascading Risk Engine**  
+Uses a DFS-based propagation algorithm to simulate how disruptions cascade through the supply chain (e.g., Lithium mine failure → battery supplier → manufacturer → retailer).
 
-- **Framework:** Next.js 15 (App Router)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS + Custom Neo-Brutalist Design System
-- **Visualization:** React Flow (Network) & Recharts (Analytics Data)
-- **State Management:** Zustand
-- **Icons:** Lucide React
+3️⃣ **Disruption Simulation**  
+Simulates supplier failures, regional collapses, and production losses to output impacted manufacturers, affected product lines, and updated cascading risk scores.
 
-## 📦 Getting Started
+4️⃣ **Geographic Concentration Analytics**  
+Detects supply chain regional dependency. Generates proactive alerts if a high percentage of suppliers (e.g., >40%) are concentrated in a single vulnerable region, helping prevent black-swan disruptions.
 
-### Prerequisites
+5️⃣ **SPOF (Single Point of Failure) Detection**  
+Automatically identifies suppliers where a downstream manufacturer depends on exactly one source for a critical component, highlighting high-risk critical nodes.
 
-- Node.js 18.x or higher
-- npm or yarn
+6️⃣ **Risk vs Cost Intelligence**  
+Scatter matrix visualizations allow for the deep analysis of high-risk/low-cost suppliers vs. expensive/safe suppliers to optimize sourcing decisions.
 
-### Installation & Running
+7️⃣ **Chokepoint Detection**  
+Detects critical components supplied by very few entities (e.g., Lithium, Silicon, Cobalt) identifying critical upstream supply vulnerabilities.
+
+8️⃣ **Smart Mitigation Engine**  
+Provides real-time recommendations such as alternative AI-ranked suppliers, geographic diversification requirements, and safety stock strategies.
+
+9️⃣ **Supplier Submission System**  
+Intuitive UI for users to dynamically add new suppliers to the graph. Captures fields like name, type, region, capacity, products, and downstream connections (integrated with Prisma ORM).
+
+## Architecture
+
+The supply chain is modeled as a **Directed Acyclic Graph (DAG)**.
+Nodes represent suppliers across 5 structured tiers:
+
+- **Tier 4** — Raw Material Suppliers
+- **Tier 3** — Component Suppliers
+- **Tier 2** — Manufacturers
+- **Tier 1** — Distributors
+- **Tier 0** — Retailers
+
+Edges represent active supply relationships. Our current dataset models **~50 suppliers**, **57 supply relationships**, and features global coverage across multiple continents.
+
+## Risk Engine
+
+Our intelligent risk engine continuously assesses nodes using a multi-dimensional weighted formula:
+
+> **Risk Score** = (0.4 × Regional Risk) + (0.3 × Logistics Risk) + (0.2 × Weather Risk) + (0.1 × Base Risk)
+
+## Simulations
+
+When a disruption simulation is triggered (e.g., toggling a node offline), the platform outputs:
+- **Impacted Manufacturers**: Who loses parts
+- **Affected Product Lines**: Which downstream products halt
+- **Cascading Risk Score**: Revised structural risk post-disruption
+
+## Analytics Dashboard
+
+The centralized Analytics Dashboard provides top-down visibility into the entire supply chain network. It tracks key metrics, efficiency ratios, cost-benefit matrices, and highlights exact structural inefficiencies in real-time.
+
+## Smart Mitigation Engine
+
+In response to detected risks or live simulations, the Smart Mitigation Engine automatically generates actionable intelligence:
+- **Alternative Suppliers**: Ranked by tier, cost, and risk reduction.
+- **Geographic Diversification**: Alerts to expand sourcing out of high-density areas.
+- **Safety Stock Strategies**: Recommends inventory buffers for unstable routes.
+
+## Technology Stack
+
+**Frontend**
+- Next.js (App Router)
+- React Flow
+- Recharts
+- TypeScript
+
+**State Management**
+- Zustand
+
+**Database**
+- Prisma ORM
+- PostgreSQL
+
+**Design System**
+- Neo-Brutalist UI
+
+## Project Structure
+
+```text
+REBEL_SUPPLY_CHAIN/
+├── app/                      # Next.js App Router (Pages & API)
+├── components/               # UI & Neo-Brutalist React Components
+├── lib/                      # Core Business Logic & Zustand Store
+├── prisma/                   # Prisma Schema & Database Setup
+├── public/                   # Static Assets
+└── types/                    # TypeScript Type Definitions
+```
+
+## Installation
 
 1. **Clone the repository:**
    ```bash
@@ -47,63 +120,38 @@ Built with a stunning Neo-Brutalist design system, this platform is optimized fo
    npm install
    ```
 
-3. **Start the development server:**
-   ```bash
-   npm run dev
+3. **Configure Environment:**
+   Create a `.env` file and add your PostgreSQL database URL.
+   ```env
+   DATABASE_URL="postgresql://user:password@localhost:5432/rebel_supply"
    ```
 
-4. **Experience the app:**
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+4. **Setup Database:**
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
 
-*(Note: This version is specifically optimized to run entirely on frontend mock data and local state, completely removing any Prisma/MySQL backend overhead.)*
+## Running the Project
 
-## 📊 Dataset Structure
-
-The platform uses a comprehensive electronics supply chain dataset out of the box:
-
-- **Nodes:** 50 Suppliers/Entities across 5 tiers
-- **Edges:** 57 Supply Relationships
-- **Risk Dimensions:** Geopolitical, Weather, Shipping, Financial Stability, Component Criticality
-- **Capacity Metrics:** Production capacity tracking
-- **Geographic Data:** Global layout tracking Region and Country for intelligent diversification
-
-## 🎯 Key Interactive Features To Try
-
-1. **Network Minimap:** Head to the Dashboard or Simulate tab and look at the bottom right of the graph. You can toggle the interactive minimap to easily navigate massive supply chains.
-2. **Rich Recommendations:** Click on any node in the graph. The Neo-Brutalist Mitigation Panel on the right will instantly give you a detailed breakdown of the node's risk and offer ranked alternatives.
-3. **Disruption Simulation:** Go to the "Simulate" tab. In the right panel, toggle any major Tier 1 or Tier 2 supplier to the "Offline" state. Hit **Simulate**! Watch as:
-   - The graph recalculates paths.
-   - Downstream dependent nodes flash warnings.
-   - Beautiful **animated dashed lines** instantly appear, linking your orphaned customer nodes to the highest-ranked alternative suppliers automatically found by the system!
-
-## 📂 Project Structure
-
-```text
-REBEL_SUPPLY_CHAIN/
-├── app/                      # Next.js App Router
-│   ├── page.tsx              # Main dashboard
-│   ├── analytics/            # Enhanced analytics with Recharts
-│   ├── simulate/             # Advanced disruption simulator
-│   └── suppliers/            # Supplier management view
-├── components/               # React components
-│   ├── NetworkGraph.tsx      # Interactive supply chain visualization (React Flow)
-│   ├── DisruptionSimulator.tsx # Simulator controls
-│   ├── MitigationPanel.tsx   # Detailed analysis and replacement engine
-│   └── Navigation.tsx        # App Navigation
-├── lib/                      # Core business logic
-│   ├── algorithms.ts         # Cascading risk calculation algorithms
-│   ├── alternativeFinder.ts  # Alternative replacement matching engine
-│   ├── riskEngine.ts         # Multi-dimensional risk assessment
-│   ├── store.ts              # Zustand state management
-│   └── mockData.ts           # Built-in 50-node electronics dataset
-├── public/                   # Static assets
-└── types/                    # TypeScript definitions
+Start the development server:
+```bash
+npm run dev
 ```
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## 📜 License
+## Future Improvements
 
-MIT License. See LICENSE for details.
+- **Real-Time API Integrations**: Live weather and geopolitical tracking APIs.
+- **AI-Powered Predictive Modeling**: Machine learning to forecast disruptions based on historical trends.
+- **Supplier Portal**: A dedicated vendor portal for live capacity updates.
+- **Automated Procurement**: Direct integration with ERP systems for automatic PO generation on disruption.
 
-## 🙏 Acknowledgments
+## Why This Project Matters
 
-Built to push the boundaries of modern, interactive UI/UX for complex enterprise data visualization. Designed and optimized with advanced agentic workflows.
+In an increasingly volatile global market, supply chain disruptions can cost enterprises billions of dollars and halt production lines worldwide. Rebel Supply Chain provides the deep visibility and proactive intelligence required to pivot sourcing strategies instantly, turning supply chain resilience into a competitive advantage.
+
+## Screenshots 
+
+![Dashboard Overview](https://raw.githubusercontent.com/aryan54-rgb/REBEL_SUPPLY_CHAIN/main/dashboard_screenshot.png)
+*(Placeholder: Additional screenshots of simulations and risk analytics go here)*
