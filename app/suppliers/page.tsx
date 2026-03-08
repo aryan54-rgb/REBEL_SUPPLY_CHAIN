@@ -21,7 +21,11 @@ import { useSupplyChainStore } from "@/lib/store";
 import { ShieldCheck } from "lucide-react";
 
 export default function SuppliersPage() {
-    const { selectedNodeId } = useSupplyChainStore();
+    const { selectedNodeId, loadFromApi } = useSupplyChainStore();
+
+    React.useEffect(() => {
+        loadFromApi();
+    }, [loadFromApi]);
 
     return (
         <div

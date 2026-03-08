@@ -164,7 +164,33 @@ export function detectSPOF(
 }
 
 // ────────────────────────────────────────────────────────────
-// 6. Mitigation Engine
+// 6. Geographic Concentration Detection
+//
+// Identifies regions or countries where too many suppliers are
+// located, which increases systemic risk.
+// ────────────────────────────────────────────────────────────
+export function detectGeographicConcentration(
+    nodes: SupplierNode[]
+): Map<string, string[]> {
+    const regionalCount = new Map<string, string[]>();
+    for (const node of nodes) {
+        const key = `${node.region} (${node.country})`;
+        if (!regionalCount.has(key)) regionalCount.set(key, []);
+        regionalCount.get(key)!.push(node.id);
+    }
+
+    const concentrations = new Map<string, string[]>();
+    for (const [key, ids] of regionalCount.entries()) {
+        // Threshold: 5 or more nodes in the same country/region combo
+        if (ids.length >= 5) {
+            concentrations.set(key, ids);
+        }
+    }
+    return concentrations;
+}
+
+// ────────────────────────────────────────────────────────────
+// 7. Mitigation Engine
 //
 // Generates concrete recommendations per supplier, including
 // multi-dimensional risk analysis.
@@ -177,7 +203,8 @@ export type MitigationType =
     | "geopolitical"
     | "weather"
     | "shipping"
-    | "financial";
+    | "financial"
+    | "concentration";
 
 export interface AlternativeSupplier {
     id: string;
@@ -340,6 +367,19 @@ export function generateMitigations(
             severity: "medium",
             title: "High-Connectivity Critical Node",
             description: `This node has ${conn} supply-chain connections. Disruption cascades widely. Recommend safety-stock policies and contingency routing.`,
+        });
+    }
+
+    // ── Geographic Concentration ───────────────────────────
+    const concentrations = detectGeographicConcentration(nodes);
+    const regionKey = `${node.region} (${node.country})`;
+    if (concentrations.has(regionKey)) {
+        const count = concentrations.get(regionKey)!.length;
+        mitigations.push({
+            type: "concentration",
+            severity: count >= 8 ? "high" : "medium",
+            title: "Geographic Concentration Risk",
+            description: `Over-concentration detected: ${count} suppliers are located in ${regionKey}. Systemic disruption (weather/geopolitical) in this area will severely impact your chain. Diversify to other regions.`,
         });
     }
 

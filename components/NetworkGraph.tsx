@@ -9,7 +9,7 @@
 //   - Auto-layout by tier (left → right)
 // ============================================================
 
-import React, { useCallback, useMemo, useEffect, useState } from "react";
+import React, { useCallback, useMemo, useEffect, useState, useRef } from "react";
 import {
     ReactFlow,
     Background,
@@ -26,17 +26,25 @@ import {
     MarkerType,
     getSmoothStepPath,
     EdgeLabelRenderer,
+    useReactFlow,
+    ReactFlowProvider,
+    Panel,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Zap } from "lucide-react";
 
 import { useSupplyChainStore } from "@/lib/store";
 import { TIER_COLORS, TIER_LABELS } from "@/lib/mockData";
+import { calculateDetailedSupplierRisk } from "@/lib/riskEngine";
 
 function edgeWeightToGray(weight: number): string {
     const numericWeight = Number(weight);
-    if (!Number.isFinite(numericWeight)) return "#9ca3af";
+    if (!Number.isFinite(numericWeight)) return "#555"; // Default to a visible gray
     const clamped = Math.max(0, Math.min(1, numericWeight));
-    const channel = Math.round(220 - clamped * 190);
+    // range [0, 120] to ensure maximum contrast on light #ddd background
+    // 0.0 weight = #787878 (Medium Gray)
+    // 1.0 weight = #000000 (Black)
+    const channel = Math.round(120 - clamped * 120);
     const hex = channel.toString(16).padStart(2, "0");
     return `#${hex}${hex}${hex}`;
 }
@@ -71,7 +79,7 @@ function CustomEdge({
     const targetName = (data?.targetName as string) || "Unknown";
 
     const { selectedNodeId, selectedUpstream, selectedDownstream } = useSupplyChainStore();
-    
+
     // Determine if this specific edge is part of the highlighted path
     const isPathActive = selectedNodeId !== null;
     const isEdgeInSelectedPath = isPathActive && (
@@ -95,7 +103,7 @@ function CustomEdge({
             }
         }
     };
-    
+
     const edgeColorFromWeight = edgeWeightToGray(weight);
     const baseStroke =
         (typeof style.stroke === "string" && style.stroke.length > 0)
@@ -103,12 +111,15 @@ function CustomEdge({
             : edgeColorFromWeight;
 
     const finalStroke = (hoverPos || isEdgeInSelectedPath) ? "#FF2E88" : baseStroke;
+    // Base 3px + up to 5px based on weight
+    const finalStrokeWidth = (hoverPos || isEdgeInSelectedPath) ? 6 : (3 + (weight * 5));
+
     const edgeStyle = {
         stroke: finalStroke,
-        strokeWidth: 3.5,
+        strokeWidth: finalStrokeWidth,
         strokeDasharray: style.strokeDasharray,
         opacity: style.opacity,
-        transition: "stroke 0.2s",
+        transition: "stroke 0.2s, strokeWidth 0.2s",
         fill: "none",
     };
 
@@ -183,6 +194,14 @@ function SupplierNodeComponent({ data, id }: NodeProps) {
     const tier = data.tier as number;
     const name = data.label as string;
     const costScore = data.cost_score as number;
+    const region = data.region as string;
+    const baseRisk = data.baseRisk as number;
+
+    // Memoize risk calculation details for tooltip
+    const riskDetails = useMemo(() => {
+        return calculateDetailedSupplierRisk(region, baseRisk);
+    }, [region, baseRisk]);
+
     const isHighRisk = riskScore > 70;
 
     const bgColor = isDisabled
@@ -191,6 +210,8 @@ function SupplierNodeComponent({ data, id }: NodeProps) {
             ? "#FF3333"
             : (TIER_COLORS[tier] ?? "#FFFFFF");
     const textColor = isDisabled ? "#666" : isHighRisk ? "#FFFFFF" : "#000000";
+
+    const [showTooltip, setShowTooltip] = useState(false);
 
     return (
         <div
@@ -220,11 +241,13 @@ function SupplierNodeComponent({ data, id }: NodeProps) {
                 position: "relative",
             }}
             onMouseEnter={(e) => {
+                setShowTooltip(true);
                 if (!isDisabled) {
                     e.currentTarget.style.transform = "translate(-2px, -2px)";
                 }
             }}
             onMouseLeave={(e) => {
+                setShowTooltip(false);
                 e.currentTarget.style.transform = "translate(0, 0)";
             }}
         >
@@ -328,6 +351,35 @@ function SupplierNodeComponent({ data, id }: NodeProps) {
                 <span>Cost: {costScore}</span>
             </div>
 
+            {/* Dynamic Risk Tooltip */}
+            {showTooltip && region && (
+                <div
+                    style={{
+                        position: "absolute",
+                        bottom: "-75px",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        background: "#000",
+                        color: "#FFF",
+                        padding: "6px 8px",
+                        borderRadius: "4px",
+                        fontSize: 8,
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                        zIndex: 20,
+                        border: "1px solid #FFF",
+                        fontFamily: "Roboto Mono, monospace",
+                        lineHeight: 1.3,
+                    }}
+                >
+                    <div>ðŸ“ Region: {region}</div>
+                    <div>ðŸŽ¯ Dynamic Risk: {riskScore}</div>
+                    <div style={{ fontSize: 7, opacity: 0.8, marginTop: 2 }}>
+                        Regional: {riskDetails.regionalRiskComponent}
+                    </div>
+                </div>
+            )}
+
             <Handle
                 type="source"
                 position={Position.Right}
@@ -349,6 +401,14 @@ const edgeTypes = { custom: CustomEdge };
 const TIER_X: Record<number, number> = { 4: 0, 3: 320, 2: 640, 1: 960, 0: 1280 };
 
 export default function NetworkGraph() {
+    return (
+        <ReactFlowProvider>
+            <NetworkGraphInner />
+        </ReactFlowProvider>
+    );
+}
+
+function NetworkGraphInner() {
     const {
         nodes: supplierNodes,
         edges: supplyEdges,
@@ -359,6 +419,8 @@ export default function NetworkGraph() {
         disabledNodeIds,
         filteredNodes,
     } = useSupplyChainStore();
+
+    const reactFlowInstance = useReactFlow();
 
     // Create a map of visible node IDs for quick lookup
     const visibleNodeIds = useMemo(() => {
@@ -393,21 +455,20 @@ export default function NetworkGraph() {
                     tier: supplier.tier,
                     risk_score: supplier.risk_score,
                     cost_score: supplier.cost_score,
+                    region: supplier.region,
+                    baseRisk: supplier.geopolitical_risk ?? 35,
                 },
             };
         });
     }, [supplierNodes]);
 
-    // Build React Flow edges with path highlighting
+    // Build React Flow edges with path highlighting and VIRTUAL recommendation edges
+    const { simulationResult } = useSupplyChainStore();
+
     const flowEdges: Edge[] = useMemo(() => {
         const highlightedPairs = new Set<string>();
         if (selectedNodeId) {
-            // Build full path: find edges connecting upstream & downstream to selected
             for (const e of supplyEdges) {
-                const srcInPath =
-                    e.source === selectedNodeId || selectedUpstream.includes(e.source);
-                const tgtInPath =
-                    e.target === selectedNodeId || selectedDownstream.includes(e.target);
                 const srcIsUpstream = selectedUpstream.includes(e.source);
                 const tgtIsSelected = e.target === selectedNodeId;
                 const srcIsSelected = e.source === selectedNodeId;
@@ -424,7 +485,8 @@ export default function NetworkGraph() {
             }
         }
 
-        return supplyEdges.map((e, i) => {
+        // 1. Regular edges
+        const regularEdges: Edge[] = supplyEdges.map((e, i) => {
             const key = `${e.source}-${e.target}`;
             const isHighlighted = highlightedPairs.has(key);
             const isDisabled =
@@ -454,7 +516,7 @@ export default function NetworkGraph() {
                         : isHighlighted
                             ? "#FF2E88"
                             : edgeColor,
-                    strokeWidth: isHighlighted ? 6 : 4, // Thicker baseline for better color visibility
+                    strokeWidth: isHighlighted ? 6 : 4,
                     strokeDasharray: isDisabled ? "8 4" : undefined,
                     opacity: isFiltered ? 0.2 : isDisabled ? 0.3 : 1,
                 },
@@ -465,12 +527,57 @@ export default function NetworkGraph() {
                 type: "custom",
             };
         });
-    }, [supplyEdges, selectedNodeId, selectedUpstream, selectedDownstream, disabledNodeIds, visibleNodeIds]);
+
+        // 2. Virtual Recommendation Edges (Alternative -> Impacted Targets)
+        const virtualEdges: Edge[] = [];
+        if (simulationResult && simulationResult.alternatives) {
+            // Gradient scale: Green -> Yellow-Green -> Yellow -> Orange -> Red
+            const RANK_COLORS = ["#9BFF00", "#D4FF00", "#FFDF00", "#FFA500", "#FF3333"];
+
+            simulationResult.alternatives.forEach((alt) => {
+                const disabledId = alt.disabledNode.id;
+
+                // Show up to top 5 alternatives per disabled node
+                alt.alternatives.slice(0, 5).forEach((candidate, rank) => {
+                    const edgeColor = RANK_COLORS[rank] || RANK_COLORS[RANK_COLORS.length - 1];
+                    const edgeOpacity = Math.max(0.3, 1 - rank * 0.15); // Fade out lower ranks
+
+                    // Find all downstream targets of the disabled node
+                    const targets = supplyEdges
+                        .filter((e) => e.source === disabledId)
+                        .map((e) => e.target);
+
+                    targets.forEach((targetId, tIdx) => {
+                        virtualEdges.push({
+                            id: `v-edge-${candidate.node.id}-${targetId}`,
+                            source: candidate.node.id,
+                            target: targetId,
+                            animated: rank === 0, // Only animate the top pick to keep UI clean
+                            label: candidate.node.name,
+                            labelStyle: { fill: edgeColor, fontWeight: 900, fontSize: 8 },
+                            style: {
+                                stroke: edgeColor,
+                                strokeWidth: rank === 0 ? 5 : 3,
+                                strokeDasharray: "5 5",
+                                opacity: edgeOpacity,
+                            },
+                            markerEnd: {
+                                type: MarkerType.ArrowClosed,
+                                color: edgeColor,
+                            },
+                            type: "custom",
+                        });
+                    });
+                });
+            });
+        }
+
+        return [...regularEdges, ...virtualEdges];
+    }, [supplyEdges, selectedNodeId, selectedUpstream, selectedDownstream, disabledNodeIds, visibleNodeIds, simulationResult, supplierNodes]);
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edgesState, setEdges, onEdgesChange] = useEdgesState(flowEdges);
 
-    // Sync edges when selection or disabled state changes
     useEffect(() => {
         setEdges(flowEdges);
     }, [flowEdges, setEdges]);
@@ -482,6 +589,9 @@ export default function NetworkGraph() {
     const onPaneClick = useCallback(() => {
         selectNode(null);
     }, [selectNode]);
+
+    // Count high-risk, disabled  nodes
+    const highRiskCount = supplierNodes.filter((n) => n.risk_score > 55).length;
 
     return (
         <div className="w-full h-full" style={{ minHeight: "100%" }}>
@@ -500,19 +610,213 @@ export default function NetworkGraph() {
                 proOptions={{ hideAttribution: true }}
             >
                 <Background gap={20} size={1} color="#ddd" />
-                <Controls />
+                <Controls showZoom={false} showFitView={false} showInteractive={false} />
+
+                {/* ── Simulation Color Legend ────────────────── */}
+                {simulationResult && (
+                    <Panel position="top-right" style={{ margin: 10 }}>
+                        <div
+                            className="brutal-card"
+                            style={{
+                                background: "#FFF",
+                                padding: "10px 14px",
+                                width: 180,
+                                transform: "rotate(-1deg)",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    fontSize: 10,
+                                    fontWeight: 900,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.06em",
+                                    borderBottom: "2px solid #000",
+                                    paddingBottom: 4,
+                                    marginBottom: 8,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                }}
+                            >
+                                <Zap size={12} fill="#000" /> Alternative Tiers
+                            </div>
+
+                            {(() => {
+                                if (!simulationResult || !simulationResult.alternatives) return null;
+                                const RANK_COLORS = ["#22C55E", "#84CC16", "#EAB308", "#F97316", "#EF4444"];
+                                const RANK_LABELS = ["Best Pick", "Solid Match", "Stable Alt", "Higher Cost", "Risky Alt"];
+                                const allCandidates: { name: string; node_id: string; rank: number }[] = [];
+                                simulationResult.alternatives.forEach((alt) => {
+                                    alt.alternatives.slice(0, 5).forEach((cand, rank) => {
+                                        if (!allCandidates.find(c => c.node_id === cand.node.id)) {
+                                            allCandidates.push({ name: cand.node.name, node_id: cand.node.id, rank });
+                                        }
+                                    });
+                                });
+                                return allCandidates
+                                    .sort((a, b) => a.rank - b.rank)
+                                    .slice(0, 5)
+                                    .map((item, i) => (
+                                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                            <div style={{ width: 12, height: 12, background: RANK_COLORS[item.rank] || RANK_COLORS[RANK_COLORS.length - 1], border: "1.5px solid #000", borderRadius: 2 }} />
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: 9, fontWeight: 900, lineHeight: 1.1 }}>{item.name}</div>
+                                                <div style={{ fontSize: 7, opacity: 0.6, fontFamily: "Roboto Mono", fontWeight: 700 }}>{RANK_LABELS[item.rank] || "Alternative"}</div>
+                                            </div>
+                                        </div>
+                                    ));
+                            })()}
+                        </div>
+                    </Panel>
+                )}
+
+                {/* ── Enhanced MiniMap Panel ───────────────── */}
+                <Panel position="bottom-right" style={{ margin: 0, padding: 0 }}>
+                    <div
+                        style={{
+                            border: "3px solid #000",
+                            boxShadow: "4px 4px 0px 0px rgba(0,0,0,1)",
+                            background: "#FFF",
+                            overflow: "hidden",
+                        }}
+                    >
+                        {/* Controls bar */}
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "4px 8px",
+                                borderBottom: "2px solid #000",
+                                background: "#000",
+                                color: "#FFF",
+                                gap: 4,
+                            }}
+                        >
+                            <span
+                                style={{
+                                    fontSize: 8,
+                                    fontWeight: 900,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.1em",
+                                    fontFamily: "Roboto Mono, monospace",
+                                }}
+                            >
+                                Navigator
+                            </span>
+                            <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
+                                {/* Node count badge */}
+                                <span
+                                    style={{
+                                        fontSize: 8,
+                                        fontWeight: 800,
+                                        background: "#9BFF00",
+                                        color: "#000",
+                                        padding: "1px 4px",
+                                        fontFamily: "Roboto Mono",
+                                        marginRight: 4,
+                                    }}
+                                >
+                                    {supplierNodes.length} nodes
+                                </span>
+                                {highRiskCount > 0 && (
+                                    <span
+                                        style={{
+                                            fontSize: 8,
+                                            fontWeight: 800,
+                                            background: "#FF3333",
+                                            color: "#FFF",
+                                            padding: "1px 4px",
+                                            fontFamily: "Roboto Mono",
+                                            marginRight: 4,
+                                        }}
+                                    >
+                                        {highRiskCount} risk
+                                    </span>
+                                )}
+                                {/* Zoom controls */}
+                                <button
+                                    onClick={() => reactFlowInstance.zoomIn({ duration: 200 })}
+                                    style={{
+                                        background: "#333",
+                                        color: "#FFF",
+                                        border: "1px solid #555",
+                                        width: 20,
+                                        height: 20,
+                                        cursor: "pointer",
+                                        fontWeight: 900,
+                                        fontSize: 12,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        padding: 0,
+                                    }}
+                                    title="Zoom In"
+                                >
+                                    +
+                                </button>
+                                <button
+                                    onClick={() => reactFlowInstance.zoomOut({ duration: 200 })}
+                                    style={{
+                                        background: "#333",
+                                        color: "#FFF",
+                                        border: "1px solid #555",
+                                        width: 20,
+                                        height: 20,
+                                        cursor: "pointer",
+                                        fontWeight: 900,
+                                        fontSize: 12,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        padding: 0,
+                                    }}
+                                    title="Zoom Out"
+                                >
+                                    −
+                                </button>
+                                <button
+                                    onClick={() => reactFlowInstance.fitView({ padding: 0.15, duration: 300 })}
+                                    style={{
+                                        background: "#9BFF00",
+                                        color: "#000",
+                                        border: "1px solid #000",
+                                        height: 20,
+                                        cursor: "pointer",
+                                        fontWeight: 900,
+                                        fontSize: 8,
+                                        padding: "0 6px",
+                                        textTransform: "uppercase",
+                                        fontFamily: "Roboto Mono",
+                                    }}
+                                    title="Fit View"
+                                >
+                                    Fit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Panel>
+
+                {/* Pannable MiniMap */}
                 <MiniMap
+                    pannable
+                    zoomable
                     nodeColor={(n) => {
                         const risk = n.data?.risk_score as number | undefined;
                         const tier = n.data?.tier as number | undefined;
                         if (disabledNodeIds.has(n.id)) return "#999";
                         if (risk && risk > 70) return "#FF3333";
+                        if (risk && risk > 55) return "#FFDF00";
                         return TIER_COLORS[tier ?? 0] ?? "#FFF";
                     }}
                     style={{
                         border: "3px solid #000",
                         boxShadow: "4px 4px 0px 0px rgba(0,0,0,1)",
+                        width: 200,
+                        height: 140,
                     }}
+                    maskColor="rgba(0, 0, 0, 0.15)"
                 />
             </ReactFlow>
         </div>

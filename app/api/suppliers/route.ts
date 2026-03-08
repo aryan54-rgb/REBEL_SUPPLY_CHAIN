@@ -1,54 +1,66 @@
-// ============================================================
-// API Route: GET /api/suppliers
-// Returns all supplier nodes with optional filtering
-// Query params: ?tier=2&search=wafer&minRisk=50&maxRisk=100
-// ============================================================
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import type { CreateSupplierInput } from "@/types";
 
-import { NextRequest, NextResponse } from "next/server";
-import { suppliers } from "@/lib/mockData";
+// POST /api/suppliers — Create a new supplier
+export async function POST(request: Request) {
+    try {
+        const body: CreateSupplierInput = await request.json();
 
-export async function GET(req: NextRequest) {
-    const { searchParams } = req.nextUrl;
-    let result = [...suppliers];
+        const { name, country, region, latitude, longitude, capacity, riskScore, costScore, createdByUserId } = body;
 
-    // Filter by tier
-    const tier = searchParams.get("tier");
-    if (tier !== null && tier !== "") {
-        result = result.filter((s) => s.tier === Number(tier));
-    }
+        if (!name || !country || !region || !createdByUserId) {
+            return NextResponse.json(
+                { success: false, error: "Missing required fields: name, country, region, createdByUserId" },
+                { status: 400 }
+            );
+        }
 
-    // Filter by search term (name or industry)
-    const search = searchParams.get("search");
-    if (search) {
-        const q = search.toLowerCase();
-        result = result.filter(
-            (s) =>
-                s.name.toLowerCase().includes(q) ||
-                s.products.toLowerCase().includes(q)
+        const supplier = await prisma.supplier.create({
+            data: {
+                name,
+                country,
+                region,
+                latitude: latitude ?? 0,
+                longitude: longitude ?? 0,
+                capacity: capacity ?? 0,
+                riskScore: riskScore ?? 0,
+                costScore: costScore ?? 0,
+                createdByUserId,
+            },
+            include: { products: { include: { product: true } } },
+        });
+
+        return NextResponse.json({ success: true, data: supplier }, { status: 201 });
+    } catch (error) {
+        console.error("[POST /api/suppliers]", error);
+        return NextResponse.json(
+            { success: false, error: error instanceof Error ? error.message : "Failed to create supplier" },
+            { status: 500 }
         );
     }
+}
 
-    // Filter by risk range
-    const minRisk = searchParams.get("minRisk");
-    const maxRisk = searchParams.get("maxRisk");
-    if (minRisk) result = result.filter((s) => s.risk_score >= Number(minRisk));
-    if (maxRisk) result = result.filter((s) => s.risk_score <= Number(maxRisk));
+// GET /api/suppliers — Return all suppliers (optionally filtered by userId)
+export async function GET(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const userId = searchParams.get("userId");
 
-    // Sort
-    const sortBy = searchParams.get("sortBy") as keyof typeof result[0] | null;
-    const sortDir = searchParams.get("sortDir") === "asc" ? 1 : -1;
-    if (sortBy && result.length > 0 && sortBy in result[0]) {
-        result.sort((a, b) => {
-            const av = a[sortBy];
-            const bv = b[sortBy];
-            if (typeof av === "number" && typeof bv === "number")
-                return (av - bv) * sortDir;
-            return String(av).localeCompare(String(bv)) * sortDir;
+        const where = userId ? { createdByUserId: userId } : {};
+
+        const suppliers = await prisma.supplier.findMany({
+            where,
+            include: { products: { include: { product: true } } },
+            orderBy: { createdAt: "desc" },
         });
-    }
 
-    return NextResponse.json({
-        count: result.length,
-        suppliers: result,
-    });
+        return NextResponse.json({ success: true, data: suppliers });
+    } catch (error) {
+        console.error("[GET /api/suppliers]", error);
+        return NextResponse.json(
+            { success: false, error: error instanceof Error ? error.message : "Failed to fetch suppliers" },
+            { status: 500 }
+        );
+    }
 }
