@@ -18,16 +18,153 @@ import {
     Node,
     Edge,
     NodeProps,
+    EdgeProps,
     Handle,
     Position,
     useNodesState,
     useEdgesState,
     MarkerType,
+    getSmoothStepPath,
+    EdgeLabelRenderer,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import { useSupplyChainStore } from "@/lib/store";
 import { TIER_COLORS, TIER_LABELS } from "@/lib/mockData";
+
+function edgeWeightToGray(weight: number): string {
+    const numericWeight = Number(weight);
+    if (!Number.isFinite(numericWeight)) return "#9ca3af";
+    const clamped = Math.max(0, Math.min(1, numericWeight));
+    const channel = Math.round(220 - clamped * 190);
+    const hex = channel.toString(16).padStart(2, "0");
+    return `#${hex}${hex}${hex}`;
+}
+
+// ── Custom Edge Component with Tooltip ──────────────────────
+function CustomEdge({
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    style = {},
+    markerEnd,
+    data,
+    animated,
+}: EdgeProps) {
+    const [edgePath, labelX, labelY] = getSmoothStepPath({
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+    });
+
+    const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+
+    const weight = (data?.dependency_weight as number) || 0;
+    const supplierName = (data?.sourceName as string) || "Unknown";
+    const targetName = (data?.targetName as string) || "Unknown";
+
+    const { selectedNodeId, selectedUpstream, selectedDownstream } = useSupplyChainStore();
+    
+    // Determine if this specific edge is part of the highlighted path
+    const isPathActive = selectedNodeId !== null;
+    const isEdgeInSelectedPath = isPathActive && (
+        (data?.sourceId === selectedNodeId && selectedDownstream.includes(data?.targetId as string)) ||
+        (data?.targetId === selectedNodeId && selectedUpstream.includes(data?.sourceId as string)) ||
+        (selectedUpstream.includes(data?.sourceId as string) && selectedUpstream.includes(data?.targetId as string)) ||
+        (selectedDownstream.includes(data?.sourceId as string) && selectedDownstream.includes(data?.targetId as string))
+    );
+
+    const onMouseMove = (event: React.MouseEvent) => {
+        // Get mouse position relative to the SVG container
+        const svg = (event.currentTarget as HTMLElement).closest('svg');
+        if (svg) {
+            const pt = svg.createSVGPoint();
+            pt.x = event.clientX;
+            pt.y = event.clientY;
+            const ctm = svg.getScreenCTM();
+            if (ctm) {
+                const localPt = pt.matrixTransform(ctm.inverse());
+                setHoverPos({ x: localPt.x, y: localPt.y });
+            }
+        }
+    };
+    
+    const edgeColorFromWeight = edgeWeightToGray(weight);
+    const baseStroke =
+        (typeof style.stroke === "string" && style.stroke.length > 0)
+            ? style.stroke
+            : edgeColorFromWeight;
+
+    const finalStroke = (hoverPos || isEdgeInSelectedPath) ? "#FF2E88" : baseStroke;
+    const edgeStyle = {
+        stroke: finalStroke,
+        strokeWidth: 3.5,
+        strokeDasharray: style.strokeDasharray,
+        opacity: style.opacity,
+        transition: "stroke 0.2s",
+        fill: "none",
+    };
+
+    return (
+        <>
+            <path
+                id={id}
+                style={edgeStyle}
+                className={`react-flow__edge-path ${animated ? 'animated' : ''}`}
+                d={edgePath}
+                markerEnd={markerEnd ? {
+                    ...markerEnd as any,
+                    color: finalStroke
+                } : undefined}
+            />
+            {/* Invisible wider path for easier hovering */}
+            <path
+                d={edgePath}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={30}
+                onMouseMove={onMouseMove}
+                onMouseEnter={onMouseMove}
+                onMouseLeave={() => setHoverPos(null)}
+                style={{ cursor: 'pointer' }}
+            />
+            {hoverPos && (
+                <EdgeLabelRenderer>
+                    <div
+                        style={{
+                            position: "absolute",
+                            transform: `translate(-50%, -120%) translate(${hoverPos.x}px,${hoverPos.y}px)`,
+                            background: "#000",
+                            color: "#FFF",
+                            padding: "6px 10px",
+                            border: "2px solid #FFDF00",
+                            zIndex: 1000,
+                            pointerEvents: "none",
+                            fontSize: "10px",
+                            fontFamily: "Roboto Mono, monospace",
+                            boxShadow: "4px 4px 0px 0px rgba(255,46,136,0.6)",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        <div style={{ fontWeight: 900, marginBottom: "2px" }}>
+                            {supplierName} → {targetName}
+                        </div>
+                        <div style={{ color: "#FFDF00", fontWeight: 800 }}>
+                            Dependency: {(weight * 100).toFixed(0)}%
+                        </div>
+                    </div>
+                </EdgeLabelRenderer>
+            )}
+        </>
+    );
+}
 
 // ── Custom Node Component ──────────────────────────────────
 function SupplierNodeComponent({ data, id }: NodeProps) {
@@ -206,6 +343,7 @@ function SupplierNodeComponent({ data, id }: NodeProps) {
 }
 
 const nodeTypes = { supplier: SupplierNodeComponent };
+const edgeTypes = { custom: CustomEdge };
 
 // ── Layout constants — 5 tiers, left → right ──────────────
 const TIER_X: Record<number, number> = { 4: 0, 3: 320, 2: 640, 1: 960, 0: 1280 };
@@ -293,26 +431,38 @@ export default function NetworkGraph() {
                 disabledNodeIds.has(e.source) || disabledNodeIds.has(e.target);
             const isFiltered = !visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target);
 
+            const sourceNode = supplierNodes.find((n) => n.id === e.source);
+            const targetNode = supplierNodes.find((n) => n.id === e.target);
+
+            const edgeColor = edgeWeightToGray(e.dependency_weight);
+
             return {
                 id: `e-${i}`,
                 source: e.source,
                 target: e.target,
                 animated: isHighlighted,
+                data: {
+                    dependency_weight: e.dependency_weight,
+                    sourceName: sourceNode?.name,
+                    targetName: targetNode?.name,
+                    sourceId: e.source,
+                    targetId: e.target,
+                },
                 style: {
                     stroke: isDisabled
-                        ? "#ccc"
+                        ? "#eee"
                         : isHighlighted
                             ? "#FF2E88"
-                            : "#000",
-                    strokeWidth: isHighlighted ? 3 : 2,
+                            : edgeColor,
+                    strokeWidth: isHighlighted ? 6 : 4, // Thicker baseline for better color visibility
                     strokeDasharray: isDisabled ? "8 4" : undefined,
                     opacity: isFiltered ? 0.2 : isDisabled ? 0.3 : 1,
                 },
                 markerEnd: {
                     type: MarkerType.ArrowClosed,
-                    color: isDisabled ? "#ccc" : isHighlighted ? "#FF2E88" : "#000",
+                    color: isDisabled ? "#eee" : isHighlighted ? "#FF2E88" : edgeColor,
                 },
-                type: "smoothstep",
+                type: "custom",
             };
         });
     }, [supplyEdges, selectedNodeId, selectedUpstream, selectedDownstream, disabledNodeIds, visibleNodeIds]);
@@ -339,6 +489,7 @@ export default function NetworkGraph() {
                 nodes={nodes}
                 edges={edgesState}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onPaneClick={onPaneClick}

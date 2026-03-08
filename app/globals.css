@@ -94,8 +94,8 @@
 }
 
 .react-flow__edge-path {
-  stroke: var(--color-brutal-black) !important;
-  stroke-width: 2px !important;
+  /* Keep defaults minimal so CustomEdge controls stroke color/width */
+  stroke-width: 2px;
 }
 
 .react-flow__controls {

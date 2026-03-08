@@ -80,6 +80,7 @@ export default function MitigationPanel() {
         mitigations,
         cascadingRisk,
         selectedEfficiencyRatio,
+        selectedDependencies,
     } = useSupplyChainStore();
 
     // ── Empty state ──────────────────────────────────────────
@@ -226,6 +227,58 @@ export default function MitigationPanel() {
                                 </React.Fragment>
                             );
                         })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Dependencies Section ────────────────────────── */}
+            {selectedDependencies.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                    <h3
+                        style={{
+                            fontSize: 13,
+                            fontWeight: 900,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            marginBottom: 10,
+                            borderBottom: "3px solid #000",
+                            paddingBottom: 6,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6
+                        }}
+                    >
+                        <Link2 size={16} /> Incoming Dependencies
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {selectedDependencies.map((dep, i) => (
+                            <div
+                                key={i}
+                                className="brutal-card"
+                                style={{
+                                    padding: "8px 12px",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    background: dep.risk > 70 ? "rgba(255,51,51,0.1)" : "#FFF",
+                                }}
+                            >
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 800, fontSize: 12 }}>{dep.name}</div>
+                                    <div style={{ fontSize: 9, fontFamily: "Roboto Mono", opacity: 0.6 }}>
+                                        Supplier Risk: {dep.risk}
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                    <div style={{ fontWeight: 900, fontSize: 16, fontFamily: "Roboto Mono" }}>
+                                        {(dep.weight * 100).toFixed(0)}%
+                                    </div>
+                                    <div style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", opacity: 0.5 }}>
+                                        Weight
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
