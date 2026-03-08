@@ -55,25 +55,31 @@ export function calculateCascadingRisk(
     let maxRisk = nodeMap.get(nodeId)?.risk_score ?? 0;
     let maxPath: string[] = [nodeId];
 
-    function dfs(current: string, visited: Set<string>, path: string[]) {
+    function dfs(current: string, visited: Set<string>, path: string[], currentWeight: number = 1.0) {
         const currentNode = nodeMap.get(current);
-        if (currentNode && currentNode.risk_score > maxRisk) {
-            maxRisk = currentNode.risk_score;
+        const weightedRisk = (currentNode?.risk_score ?? 0) * currentWeight;
+        
+        if (weightedRisk > maxRisk) {
+            maxRisk = weightedRisk;
             maxPath = [...path];
         }
 
         const parents = upstream.get(current) ?? [];
         for (const parent of parents) {
             if (!visited.has(parent)) {
+                // Find the edge between parent and current to get dependency_weight
+                const edge = edges.find(e => e.source === parent && e.target === current);
+                const weight = edge?.dependency_weight ?? 1.0;
+                
                 visited.add(parent);
-                dfs(parent, visited, [...path, parent]);
+                dfs(parent, visited, [...path, parent], weight);
                 visited.delete(parent);
             }
         }
     }
 
     const visited = new Set<string>([nodeId]);
-    dfs(nodeId, visited, [nodeId]);
+    dfs(nodeId, visited, [nodeId], 1.0);
 
     return {
         node_id: nodeId,

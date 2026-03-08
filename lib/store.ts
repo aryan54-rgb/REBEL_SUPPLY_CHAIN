@@ -70,6 +70,7 @@ interface SupplyChainState {
     selectedConnectivity: number;
     selectedUpstream: string[];
     selectedDownstream: string[];
+    selectedDependencies: { name: string; weight: number; risk: number }[];
 
     // ── Search & filter ───────────────────────────────────
     searchQuery: string;
@@ -252,6 +253,7 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
         selectedConnectivity: 0,
         selectedUpstream: [],
         selectedDownstream: [],
+        selectedDependencies: [],
 
         // Search & filter
         searchQuery: "",
@@ -275,16 +277,17 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
         selectNode: (id) => {
             const { nodes, edges } = get();
             if (!id) {
-                set({
-                    selectedNodeId: null,
-                    selectedNode: null,
-                    mitigations: [],
-                    cascadingRisk: null,
-                    selectedEfficiencyRatio: null,
-                    selectedConnectivity: 0,
-                    selectedUpstream: [],
-                    selectedDownstream: [],
-                });
+            set({
+                selectedNodeId: null,
+                selectedNode: null,
+                mitigations: [],
+                cascadingRisk: null,
+                selectedEfficiencyRatio: null,
+                selectedConnectivity: 0,
+                selectedUpstream: [],
+                selectedDownstream: [],
+                selectedDependencies: [],
+            });
                 return;
             }
 
@@ -296,6 +299,19 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
             const downstream = buildDownstreamGraph(edges);
             const upstream = buildUpstreamGraph(edges);
 
+            // Fetch specific dependency weight info for the selected node (incoming edges)
+            const dependencies = edges
+                .filter(e => e.target === id)
+                .map(e => {
+                    const srcNode = nodes.find(n => n.id === e.source);
+                    return {
+                        name: srcNode?.name ?? e.source,
+                        weight: e.dependency_weight,
+                        risk: srcNode?.risk_score ?? 0
+                    };
+                })
+                .sort((a, b) => b.weight - a.weight);
+
             set({
                 selectedNodeId: id,
                 selectedNode: node,
@@ -305,6 +321,7 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
                 selectedConnectivity: connectivity.get(id) ?? 0,
                 selectedUpstream: upstream.get(id) ?? [],
                 selectedDownstream: downstream.get(id) ?? [],
+                selectedDependencies: dependencies,
             });
         },
 
