@@ -21,6 +21,10 @@ const DisruptionSimulator = dynamic(
     () => import("@/components/DisruptionSimulator"),
     { ssr: false }
 );
+const RegionCollapseSimulator = dynamic(
+    () => import("@/components/RegionCollapseSimulator"),
+    { ssr: false }
+);
 
 export default function SimulatePage() {
     return (
@@ -93,11 +97,14 @@ export default function SimulatePage() {
 
                 {/* Simulator panel */}
                 <aside
+                    className="brutal-scrollbar"
                     style={{
-                        overflow: "hidden",
+                        overflowY: "auto",
                         background: "#FFF",
+                        padding: "0 4px",
                     }}
                 >
+                    <RegionCollapseSimulator />
                     <DisruptionSimulator />
                 </aside>
             </main>

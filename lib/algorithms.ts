@@ -164,33 +164,7 @@ export function detectSPOF(
 }
 
 // ────────────────────────────────────────────────────────────
-// 6. Geographic Concentration Detection
-//
-// Identifies regions or countries where too many suppliers are
-// located, which increases systemic risk.
-// ────────────────────────────────────────────────────────────
-export function detectGeographicConcentration(
-    nodes: SupplierNode[]
-): Map<string, string[]> {
-    const regionalCount = new Map<string, string[]>();
-    for (const node of nodes) {
-        const key = `${node.region} (${node.country})`;
-        if (!regionalCount.has(key)) regionalCount.set(key, []);
-        regionalCount.get(key)!.push(node.id);
-    }
-
-    const concentrations = new Map<string, string[]>();
-    for (const [key, ids] of regionalCount.entries()) {
-        // Threshold: 5 or more nodes in the same country/region combo
-        if (ids.length >= 5) {
-            concentrations.set(key, ids);
-        }
-    }
-    return concentrations;
-}
-
-// ────────────────────────────────────────────────────────────
-// 7. Mitigation Engine
+// 6. Mitigation Engine
 //
 // Generates concrete recommendations per supplier, including
 // multi-dimensional risk analysis.
@@ -203,8 +177,7 @@ export type MitigationType =
     | "geopolitical"
     | "weather"
     | "shipping"
-    | "financial"
-    | "concentration";
+    | "financial";
 
 export interface AlternativeSupplier {
     id: string;
@@ -370,18 +343,82 @@ export function generateMitigations(
         });
     }
 
-    // ── Geographic Concentration ───────────────────────────
-    const concentrations = detectGeographicConcentration(nodes);
-    const regionKey = `${node.region} (${node.country})`;
-    if (concentrations.has(regionKey)) {
-        const count = concentrations.get(regionKey)!.length;
-        mitigations.push({
-            type: "concentration",
-            severity: count >= 8 ? "high" : "medium",
-            title: "Geographic Concentration Risk",
-            description: `Over-concentration detected: ${count} suppliers are located in ${regionKey}. Systemic disruption (weather/geopolitical) in this area will severely impact your chain. Diversify to other regions.`,
-        });
+    return mitigations;
+}
+
+// ────────────────────────────────────────────────────────────
+// 7. Region Collapse Simulation
+// ────────────────────────────────────────────────────────────
+export interface RegionCollapseResult {
+    disruptedSuppliers: number;
+    affectedManufacturers: number;
+    productionLoss: number;
+    affectedProducts: string[];
+    suggestedMitigation: string;
+}
+
+export function simulateRegionCollapse(
+    selectedRegion: string,
+    nodes: SupplierNode[],
+    edges: SupplyEdge[]
+): RegionCollapseResult {
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const downstream = buildDownstreamGraph(edges);
+
+    // 1. Find all suppliers in the region
+    const regionalSuppliers = nodes.filter(
+        (n) => n.region === selectedRegion && n.type !== "Manufacturer" && n.type !== "Retailer"
+    );
+
+    // 2. Identify all affected nodes (downstream)
+    const affectedNodeIds = new Set<string>();
+    const queue = regionalSuppliers.map((s) => s.id);
+    const visited = new Set<string>(queue);
+
+    while (queue.length > 0) {
+        const currentId = queue.shift()!;
+        const targets = downstream.get(currentId) ?? [];
+        for (const targetId of targets) {
+            if (!visited.has(targetId)) {
+                visited.add(targetId);
+                affectedNodeIds.add(targetId);
+                queue.push(targetId);
+            }
+        }
     }
 
-    return mitigations;
+    // 3. Count manufacturers affected
+    const affectedManufacturers = Array.from(affectedNodeIds)
+        .map((id) => nodeMap.get(id))
+        .filter((n) => n?.type === "Manufacturer") as SupplierNode[];
+
+    // 4. Calculate total lost production capacity
+    const productionLoss = regionalSuppliers.reduce((sum, s) => {
+        return sum + (s.capacity ?? 0);
+    }, 0);
+
+    // 5. Identify affected products
+    const affectedProducts = Array.from(
+        new Set(affectedManufacturers.map((m) => m.products))
+    );
+
+    // 6. Generate suggested mitigation
+    const availableAlternativeRegions = Array.from(
+        new Set(nodes.map((n) => n.region))
+    ).filter((r) => r !== selectedRegion);
+    
+    // Pick two most stable regions (Europe and North America are usually good)
+    const preferredRegions = ["Europe", "North America", "Oceania"].filter(r => availableAlternativeRegions.includes(r)).slice(0, 2);
+    
+    const suggestedMitigation = preferredRegions.length > 0 
+        ? `Diversify suppliers to ${preferredRegions.join(" and ")}`
+        : "Establish backup sourcing in other geographic regions";
+
+    return {
+        disruptedSuppliers: regionalSuppliers.length,
+        affectedManufacturers: affectedManufacturers.length,
+        productionLoss,
+        affectedProducts,
+        suggestedMitigation,
+    };
 }

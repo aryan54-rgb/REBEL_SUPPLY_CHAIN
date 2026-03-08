@@ -32,7 +32,6 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
     high_risk: <AlertTriangle size={20} />,
     dangerous_dependency: <TrendingDown size={20} />,
     critical_node: <Link2 size={20} />,
-    concentration: <Info size={20} />,
 };
 
 function MitigationCard({ m }: { m: Mitigation }) {
@@ -225,45 +224,6 @@ export default function MitigationPanel() {
                     >
                         {selectedEfficiencyRatio ?? "—"}
                     </div>
-                </div>
-            </div>
-
-            {/* ── Risk Math Section ────────────────────────────── */}
-            <div
-                style={{
-                    padding: "12px 14px",
-                    background: "#F0F0F0",
-                    border: "3px solid #000",
-                    marginBottom: 16,
-                    fontFamily: "Roboto Mono, monospace",
-                }}
-            >
-                <div style={{ fontSize: 10, fontWeight: 900, textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
-                    <Info size={14} /> Risk Math Model
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 4 }}>
-                    Formula: (Impact × Probability) + Dependency
-                </div>
-                <div style={{ fontSize: 10, opacity: 0.7, lineHeight: 1.4 }}>
-                    • Impact Weight: 0.40 (Fixed)<br />
-                    • Probability: 0.4*Geo + 0.3*Log + 0.3*Weather<br />
-                    • Dependency: +5 per connection (Max 20)
-                </div>
-                <div
-                    style={{
-                        marginTop: 10,
-                        paddingTop: 8,
-                        borderTop: "2px solid #000",
-                        fontSize: 12,
-                        fontWeight: 900,
-                        display: "flex",
-                        justifyContent: "space-between"
-                    }}
-                >
-                    <span>Final Risk:</span>
-                    <span style={{ color: selectedNode.risk_score > 60 ? "#FF3333" : "#000" }}>
-                        {selectedNode.risk_score}/100
-                    </span>
                 </div>
             </div>
 
