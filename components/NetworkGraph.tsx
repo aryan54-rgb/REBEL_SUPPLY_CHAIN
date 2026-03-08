@@ -449,10 +449,10 @@ export default function NetworkGraph() {
                     targetId: e.target,
                 },
                 style: {
-                    stroke: isDisabled
-                        ? "#eee"
-                        : isHighlighted
-                            ? "#FF2E88"
+                    stroke: isHighlighted
+                        ? "#FF2E88"
+                        : isDisabled
+                            ? "#eee"
                             : edgeColor,
                     strokeWidth: isHighlighted ? 6 : 4, // Thicker baseline for better color visibility
                     strokeDasharray: isDisabled ? "8 4" : undefined,
@@ -460,7 +460,7 @@ export default function NetworkGraph() {
                 },
                 markerEnd: {
                     type: MarkerType.ArrowClosed,
-                    color: isDisabled ? "#eee" : isHighlighted ? "#FF2E88" : edgeColor,
+                    color: isHighlighted ? "#FF2E88" : isDisabled ? "#eee" : edgeColor,
                 },
                 type: "custom",
             };
