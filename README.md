@@ -71,4 +71,5 @@ The project uses a comprehensive electronics dataset:
 
 MIT License. See `LICENSE` for details.
 
-
+---
+*Built for the Supply Chain Resilience Hackathon Prototype.*

@@ -15,7 +15,6 @@ import {
   Layers,
   ShieldCheck,
   TrendingDown,
-  Zap,
 } from "lucide-react";
 import { useSupplyChainStore } from "@/lib/store";
 import { TIER_LABELS, TIER_COLORS } from "@/lib/mockData";
@@ -138,9 +137,23 @@ function TierLegend() {
 }
 
 export default function DashboardPage() {
-  const { networkAnalytics } = useSupplyChainStore();
+  const {
+    networkAnalytics,
+    selectedRegion,
+    selectedManufacturerId,
+    radiusKm,
+    filteredNodes,
+    loadFromApi,
+  } = useSupplyChainStore();
   const { totalNodes, avgRisk, highRiskCount, spofCount, dangerousDepCount } =
     networkAnalytics;
+  const visibleSuppliers = filteredNodes.length;
+  const radiusLabel =
+    selectedManufacturerId && radiusKm > 0 ? `${radiusKm} km` : "Off";
+
+  React.useEffect(() => {
+    loadFromApi();
+  }, [loadFromApi]);
 
   return (
     <div
@@ -225,6 +238,40 @@ export default function DashboardPage() {
         >
           <div style={{ padding: "8px 12px", borderBottom: "2px solid #000", background: "#FFF" }}>
             <FilterControls />
+          </div>
+          <div
+            style={{
+              padding: "8px 12px",
+              borderBottom: "2px solid #000",
+              background: "#FFF8D6",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                opacity: 0.65,
+                marginBottom: 4,
+              }}
+            >
+              Filtered Network
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: "Roboto Mono, monospace",
+              }}
+            >
+              <span>Region = {selectedRegion}</span>
+              <span>Radius = {radiusLabel}</span>
+              <span>Visible Suppliers = {visibleSuppliers}</span>
+            </div>
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
             <NetworkGraph />

@@ -24,6 +24,8 @@ import {
     buildUpstreamGraph,
 } from "./algorithms";
 import { calculateDistance } from "./distance";
+import { applyDynamicRiskToNodes } from "./riskEngine";
+import { findAllAlternatives, AlternativeResult } from "./alternativeFinder";
 
 // ── Simulation impact result ───────────────────────────────
 export interface SimulationResult {
@@ -37,6 +39,7 @@ export interface SimulationResult {
     afterAvgRisk: number;
     beforeSpofCount: number;
     afterSpofCount: number;
+    alternatives: AlternativeResult[];
 }
 
 // ── Node analysis row (used on analytics & table pages) ────
@@ -113,7 +116,8 @@ interface SupplyChainState {
     clearDisabledNodes: () => void;
     runSimulation: () => void;
     recomputeAnalytics: () => void;
-}
+    loadFromApi: () => Promise<void>;
+};
 
 // ── Helper: compute filtered nodes ────────────────────────
 function applyFilters(
@@ -199,9 +203,6 @@ function computeAnalytics(nodes: SupplierNode[], edgeList: SupplyEdge[]) {
         };
     });
 
-    // Per-node analysis
-    const downstream = buildDownstreamGraph(edgeList);
-    const upstream = buildUpstreamGraph(edgeList);
     const nodeAnalyses: NodeAnalysis[] = nodes.map((n) => {
         const cascading = calculateCascadingRisk(n.id, nodes, edgeList);
         const ratio = efficiencyRatio(n);
@@ -237,11 +238,13 @@ function computeAnalytics(nodes: SupplierNode[], edgeList: SupplyEdge[]) {
 }
 
 export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
-    const initialAnalytics = computeAnalytics(allSuppliers, allEdges);
+    // Apply dynamic risk engine to all suppliers based on region
+    const suppliersWithDynamicRisk = applyDynamicRiskToNodes(allSuppliers);
+    const initialAnalytics = computeAnalytics(suppliersWithDynamicRisk, allEdges);
 
     return {
         // Core data
-        nodes: allSuppliers,
+        nodes: suppliersWithDynamicRisk,
         edges: allEdges,
 
         // Selection
@@ -262,7 +265,7 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
         selectedRegion: "All",
         selectedManufacturerId: null,
         radiusKm: 0,
-        filteredNodes: allSuppliers,
+        filteredNodes: suppliersWithDynamicRisk,
 
         // Disruption
         disabledNodeIds: new Set<string>(),
@@ -277,17 +280,17 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
         selectNode: (id) => {
             const { nodes, edges } = get();
             if (!id) {
-            set({
-                selectedNodeId: null,
-                selectedNode: null,
-                mitigations: [],
-                cascadingRisk: null,
-                selectedEfficiencyRatio: null,
-                selectedConnectivity: 0,
-                selectedUpstream: [],
-                selectedDownstream: [],
-                selectedDependencies: [],
-            });
+                set({
+                    selectedNodeId: null,
+                    selectedNode: null,
+                    mitigations: [],
+                    cascadingRisk: null,
+                    selectedEfficiencyRatio: null,
+                    selectedConnectivity: 0,
+                    selectedUpstream: [],
+                    selectedDownstream: [],
+                    selectedDependencies: [],
+                });
                 return;
             }
 
@@ -427,6 +430,9 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
                 return had && !has;
             });
 
+            // Find alternative replacements for each disabled node
+            const alternatives = findAllAlternatives(disabledSet, nodes, edges);
+
             set({
                 isSimulating: false,
                 simulationResult: {
@@ -440,6 +446,7 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
                     afterAvgRisk: Math.round(afterAvgRisk * 10) / 10,
                     beforeSpofCount: beforeSpofs.length,
                     afterSpofCount: afterSpofs.length,
+                    alternatives,
                 },
             });
         },
@@ -447,6 +454,24 @@ export const useSupplyChainStore = create<SupplyChainState>((set, get) => {
         recomputeAnalytics: () => {
             const { nodes, edges } = get();
             set({ networkAnalytics: computeAnalytics(nodes, edges) });
+        },
+        // load data from backend APIs and refresh analytics
+        loadFromApi: async () => {
+            try {
+                const [supRes, edgeRes] = await Promise.all([
+                    fetch('/api/suppliers').then((r) => r.json()),
+                    fetch('/api/edges').then((r) => r.json()),
+                ]);
+                if (supRes?.success) {
+                    set({ nodes: supRes.data });
+                }
+                if (edgeRes?.success) {
+                    set({ edges: edgeRes.data });
+                }
+                get().recomputeAnalytics();
+            } catch (e) {
+                console.error('store.loadFromApi failed', e);
+            }
         },
     };
 });

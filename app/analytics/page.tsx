@@ -18,6 +18,8 @@ import {
     Target,
     Zap,
     ArrowRight,
+    Maximize2,
+    X,
 } from "lucide-react";
 import { useSupplyChainStore } from "@/lib/store";
 import { TIER_LABELS, TIER_COLORS } from "@/lib/mockData";
@@ -92,8 +94,35 @@ function BigStat({
     );
 }
 
+function MaximizeButton({ onClick }: { onClick: () => void }) {
+    return (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onClick();
+            }}
+            style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: 4,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "transform 0.1s",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        >
+            <Maximize2 size={14} strokeWidth={3} />
+        </button>
+    );
+}
+
 export default function AnalyticsPage() {
     const { networkAnalytics, selectNode } = useSupplyChainStore();
+    const [maximizedSection, setMaximizedSection] = React.useState<string | null>(null);
+
     const {
         totalNodes,
         totalEdges,
@@ -113,15 +142,197 @@ export default function AnalyticsPage() {
         .sort((a, b) => b.cascading_risk - a.cascading_risk)
         .slice(0, 5);
 
-    // Dangerous dependencies (efficiency < 1 and risk > 50)
-    const dangerousDeps = nodeAnalyses.filter(
-        (n) => n.efficiency_ratio < 1 && n.risk_score > 35
-    );
-
     // Most connected
     const mostConnected = [...nodeAnalyses]
         .sort((a, b) => b.connectivity - a.connectivity)
         .slice(0, 5);
+
+    const renderSection = (id: string, isMaximized = false) => {
+        const headerStyle: React.CSSProperties = {
+            fontSize: isMaximized ? 18 : 12,
+            fontWeight: 900,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            marginBottom: 12,
+            margin: 0,
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+        };
+
+        switch (id) {
+            case "risk-tier":
+                return (
+                    <>
+                        <h3 style={headerStyle}>
+                            <span>
+                                <BarChart3
+                                    size={isMaximized ? 20 : 14}
+                                    strokeWidth={3}
+                                    style={{ display: "inline", marginRight: 6 }}
+                                />
+                                Risk by Tier
+                            </span>
+                            {!isMaximized && <MaximizeButton onClick={() => setMaximizedSection("risk-tier")} />}
+                        </h3>
+                        <div style={{ height: isMaximized ? "70vh" : 250, marginTop: 10 }}>
+                            <TierBreakdownChart />
+                        </div>
+                    </>
+                );
+            case "risk-cost":
+                return (
+                    <>
+                        <h3 style={headerStyle}>
+                            <span>
+                                <Target
+                                    size={isMaximized ? 20 : 14}
+                                    strokeWidth={3}
+                                    style={{ display: "inline", marginRight: 6 }}
+                                />
+                                Risk vs Cost Matrix
+                            </span>
+                            {!isMaximized && <MaximizeButton onClick={() => setMaximizedSection("risk-cost")} />}
+                        </h3>
+                        <div style={{ height: isMaximized ? "70vh" : 250, marginTop: 10 }}>
+                            <RiskCostMatrix />
+                        </div>
+                    </>
+                );
+            case "top-risky":
+                return (
+                    <>
+                        <h3 style={{ ...headerStyle, borderBottom: isMaximized ? "4px solid #000" : "3px solid #000", paddingBottom: 6 }}>
+                            <span>🔴 Top 5 Riskiest (Cascading)</span>
+                            {!isMaximized && <MaximizeButton onClick={() => setMaximizedSection("top-risky")} />}
+                        </h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: isMaximized ? 12 : 6, marginTop: isMaximized ? 20 : 10 }}>
+                            {topRisky.map((n, i) => (
+                                <div
+                                    key={n.id}
+                                    onClick={() => {
+                                        if (isMaximized) setMaximizedSection(null);
+                                        selectNode(n.id);
+                                    }}
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 12,
+                                        padding: isMaximized ? "16px 20px" : "6px 8px",
+                                        border: isMaximized ? "3px solid #000" : "2px solid #000",
+                                        cursor: "pointer",
+                                        background: n.cascading_risk > 55 ? "rgba(255,51,51,0.1)" : "#FFF",
+                                        transition: "all 0.1s",
+                                        boxShadow: isMaximized ? "6px 6px 0px 0px rgba(0,0,0,1)" : "none",
+                                    }}
+                                    className={isMaximized ? "brutal-btn" : ""}
+                                >
+                                    <span
+                                        style={{
+                                            fontWeight: 900,
+                                            fontSize: isMaximized ? 24 : 14,
+                                            fontFamily: "Roboto Mono",
+                                            width: isMaximized ? 40 : 20,
+                                            color: "#FF3333",
+                                        }}
+                                    >
+                                        {i + 1}
+                                    </span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: 800, fontSize: isMaximized ? 16 : 11, lineHeight: 1.2 }}>
+                                            {n.name}
+                                        </div>
+                                        <div style={{ fontSize: isMaximized ? 12 : 9, fontFamily: "Roboto Mono", opacity: 0.6 }}>
+                                            {TIER_LABELS[n.tier]}
+                                        </div>
+                                    </div>
+                                    <span
+                                        style={{
+                                            fontWeight: 900,
+                                            fontSize: isMaximized ? 24 : 14,
+                                            fontFamily: "Roboto Mono",
+                                            color: n.cascading_risk > 55 ? "#FF3333" : "#000",
+                                        }}
+                                    >
+                                        {n.cascading_risk}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                );
+            case "most-connected":
+                return (
+                    <>
+                        <h3 style={{ ...headerStyle, borderBottom: isMaximized ? "4px solid #000" : "3px solid #000", paddingBottom: 6 }}>
+                            <span>🔗 Most Connected Nodes</span>
+                            {!isMaximized && <MaximizeButton onClick={() => setMaximizedSection("most-connected")} />}
+                        </h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: isMaximized ? 12 : 6, marginTop: isMaximized ? 20 : 10 }}>
+                            {mostConnected.map((n, i) => (
+                                <div
+                                    key={n.id}
+                                    onClick={() => {
+                                        if (isMaximized) setMaximizedSection(null);
+                                        selectNode(n.id);
+                                    }}
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 12,
+                                        padding: isMaximized ? "16px 20px" : "6px 8px",
+                                        border: isMaximized ? "3px solid #000" : "2px solid #000",
+                                        cursor: "pointer",
+                                        background: "#FFF",
+                                        transition: "all 0.1s",
+                                        boxShadow: isMaximized ? "6px 6px 0px 0px rgba(0,0,0,1)" : "none",
+                                    }}
+                                    className={isMaximized ? "brutal-btn" : ""}
+                                >
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: 800, fontSize: isMaximized ? 16 : 11, lineHeight: 1.2 }}>
+                                            {n.name}
+                                        </div>
+                                        <div style={{ fontSize: isMaximized ? 12 : 9, fontFamily: "Roboto Mono", opacity: 0.6 }}>
+                                            {n.is_spof && (
+                                                <span
+                                                    style={{
+                                                        background: "#FF3333",
+                                                        color: "#FFF",
+                                                        padding: "0 6px",
+                                                        marginRight: 6,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    SPOF
+                                                </span>
+                                            )}
+                                            {TIER_LABELS[n.tier]}
+                                        </div>
+                                    </div>
+                                    <span
+                                        style={{
+                                            fontWeight: 900,
+                                            fontSize: isMaximized ? 24 : 14,
+                                            fontFamily: "Roboto Mono",
+                                            background: "#000",
+                                            color: "#FFF",
+                                            padding: isMaximized ? "4px 16px" : "2px 8px",
+                                            border: "3px solid #000",
+                                        }}
+                                    >
+                                        {n.connectivity}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                );
+            default:
+                return null;
+        }
+    };
 
     return (
         <div
@@ -225,54 +436,11 @@ export default function AnalyticsPage() {
                         marginBottom: 20,
                     }}
                 >
-                    {/* Tier Breakdown */}
                     <div className="brutal-card" style={{ padding: 16 }}>
-                        <h3
-                            style={{
-                                fontSize: 12,
-                                fontWeight: 900,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                marginBottom: 12,
-                                margin: 0,
-                                padding: 0,
-                            }}
-                        >
-                            <BarChart3
-                                size={14}
-                                strokeWidth={3}
-                                style={{ display: "inline", marginRight: 6 }}
-                            />
-                            Risk by Tier
-                        </h3>
-                        <div style={{ height: 250, marginTop: 10 }}>
-                            <TierBreakdownChart />
-                        </div>
+                        {renderSection("risk-tier")}
                     </div>
-
-                    {/* Risk/Cost scatter */}
                     <div className="brutal-card" style={{ padding: 16 }}>
-                        <h3
-                            style={{
-                                fontSize: 12,
-                                fontWeight: 900,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                marginBottom: 12,
-                                margin: 0,
-                                padding: 0,
-                            }}
-                        >
-                            <Target
-                                size={14}
-                                strokeWidth={3}
-                                style={{ display: "inline", marginRight: 6 }}
-                            />
-                            Risk vs Cost Matrix
-                        </h3>
-                        <div style={{ height: 250, marginTop: 10 }}>
-                            <RiskCostMatrix />
-                        </div>
+                        {renderSection("risk-cost")}
                     </div>
                 </div>
 
@@ -285,85 +453,11 @@ export default function AnalyticsPage() {
                         marginBottom: 20,
                     }}
                 >
-                    {/* Top Risky */}
                     <div className="brutal-card" style={{ padding: 14 }}>
-                        <h3
-                            style={{
-                                fontSize: 11,
-                                fontWeight: 900,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                marginBottom: 10,
-                                borderBottom: "3px solid #000",
-                                paddingBottom: 6,
-                            }}
-                        >
-                            🔴 Top 5 Riskiest (Cascading)
-                        </h3>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {topRisky.map((n, i) => (
-                                <div
-                                    key={n.id}
-                                    onClick={() => selectNode(n.id)}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                        padding: "6px 8px",
-                                        border: "2px solid #000",
-                                        cursor: "pointer",
-                                        background: n.cascading_risk > 55 ? "rgba(255,51,51,0.1)" : "#FFF",
-                                        transition: "background 0.1s",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = "rgba(255,223,0,0.2)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background =
-                                            n.cascading_risk > 55 ? "rgba(255,51,51,0.1)" : "#FFF";
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontWeight: 900,
-                                            fontSize: 14,
-                                            fontFamily: "Roboto Mono",
-                                            width: 20,
-                                            color: "#FF3333",
-                                        }}
-                                    >
-                                        {i + 1}
-                                    </span>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: 800, fontSize: 11, lineHeight: 1.2 }}>
-                                            {n.name}
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: 9,
-                                                fontFamily: "Roboto Mono",
-                                                opacity: 0.6,
-                                            }}
-                                        >
-                                            {TIER_LABELS[n.tier]}
-                                        </div>
-                                    </div>
-                                    <span
-                                        style={{
-                                            fontWeight: 900,
-                                            fontSize: 14,
-                                            fontFamily: "Roboto Mono",
-                                            color: n.cascading_risk > 55 ? "#FF3333" : "#000",
-                                        }}
-                                    >
-                                        {n.cascading_risk}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                        {renderSection("top-risky")}
                     </div>
 
-                    {/* Dangerous Dependencies */}
+                    {/* Dangerous Dependencies (No maximize requested for this one specifically, but keeping it as is) */}
                     <div className="brutal-card" style={{ padding: 14 }}>
                         <h3
                             style={{
@@ -378,7 +472,7 @@ export default function AnalyticsPage() {
                         >
                             ⚠ Dangerous Dependencies
                         </h3>
-                        {dangerousDeps.length === 0 ? (
+                        {nodeAnalyses.filter(n => n.efficiency_ratio < 1 && n.risk_score > 35).length === 0 ? (
                             <div
                                 style={{
                                     padding: 12,
@@ -393,7 +487,7 @@ export default function AnalyticsPage() {
                             </div>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                {dangerousDeps.map((n) => (
+                                {nodeAnalyses.filter(n => n.efficiency_ratio < 1 && n.risk_score > 35).map((n) => (
                                     <div
                                         key={n.id}
                                         onClick={() => selectNode(n.id)}
@@ -432,86 +526,8 @@ export default function AnalyticsPage() {
                         )}
                     </div>
 
-                    {/* Most Connected */}
                     <div className="brutal-card" style={{ padding: 14 }}>
-                        <h3
-                            style={{
-                                fontSize: 11,
-                                fontWeight: 900,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                marginBottom: 10,
-                                borderBottom: "3px solid #000",
-                                paddingBottom: 6,
-                            }}
-                        >
-                            🔗 Most Connected Nodes
-                        </h3>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {mostConnected.map((n, i) => (
-                                <div
-                                    key={n.id}
-                                    onClick={() => selectNode(n.id)}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                        padding: "6px 8px",
-                                        border: "2px solid #000",
-                                        cursor: "pointer",
-                                        background: "#FFF",
-                                        transition: "background 0.1s",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = "rgba(255,223,0,0.2)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = "#FFF";
-                                    }}
-                                >
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: 800, fontSize: 11, lineHeight: 1.2 }}>
-                                            {n.name}
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: 9,
-                                                fontFamily: "Roboto Mono",
-                                                opacity: 0.6,
-                                            }}
-                                        >
-                                            {n.is_spof && (
-                                                <span
-                                                    style={{
-                                                        background: "#FF3333",
-                                                        color: "#FFF",
-                                                        padding: "0 4px",
-                                                        marginRight: 4,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    SPOF
-                                                </span>
-                                            )}
-                                            {TIER_LABELS[n.tier]}
-                                        </div>
-                                    </div>
-                                    <span
-                                        style={{
-                                            fontWeight: 900,
-                                            fontSize: 14,
-                                            fontFamily: "Roboto Mono",
-                                            background: "#000",
-                                            color: "#FFF",
-                                            padding: "2px 8px",
-                                            border: "2px solid #000",
-                                        }}
-                                    >
-                                        {n.connectivity}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                        {renderSection("most-connected")}
                     </div>
                 </div>
 
@@ -561,6 +577,39 @@ export default function AnalyticsPage() {
                     ))}
                 </div>
             </div>
+
+            {/* ── Maximized Overlay ───────────────────────────── */}
+            {maximizedSection && (
+                <div className="maximize-overlay" onClick={() => setMaximizedSection(null)}>
+                    <div
+                        className="maximized-content brutal-scrollbar"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ padding: 30, overflowY: "auto" }}
+                    >
+                        <button
+                            onClick={() => setMaximizedSection(null)}
+                            style={{
+                                position: "absolute",
+                                top: 20,
+                                right: 20,
+                                background: "#000",
+                                color: "#FFF",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: 8,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                zIndex: 10,
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+                        {renderSection(maximizedSection, true)}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+
