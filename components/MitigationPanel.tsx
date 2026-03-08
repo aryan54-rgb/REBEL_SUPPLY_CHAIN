@@ -64,12 +64,42 @@ function MitigationCard({ m }: { m: Mitigation }) {
                 style={{
                     fontSize: 12,
                     lineHeight: 1.5,
-                    margin: 0,
+                    margin: "0 0 12px 0",
                     fontFamily: "Roboto Mono, monospace",
                 }}
             >
                 {m.description}
             </p>
+
+            {/* Short Recommendations */}
+            {m.alternatives && m.alternatives.length > 0 && (
+                <div style={{ marginTop: 12, borderTop: "2px solid rgba(0,0,0,0.1)", paddingTop: 10 }}>
+                    <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", marginBottom: 6, display: "flex", alignItems: "center", gap: 4, opacity: 0.7 }}>
+                        <Zap size={10} /> Recommended Alternatives:
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {m.alternatives.map((alt) => (
+                            <div 
+                                key={alt.id}
+                                className="brutal-badge"
+                                style={{ 
+                                    background: alt.risk_score < 30 ? "#9BFF00" : "#FFDF00",
+                                    color: "#000",
+                                    fontSize: 9,
+                                    padding: "2px 6px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4
+                                }}
+                                title={`${alt.country} | Risk: ${alt.risk_score} | Cost: ${alt.cost_score}`}
+                            >
+                                <span style={{ fontWeight: 900 }}>{alt.name}</span>
+                                <span style={{ opacity: 0.6, fontSize: 8 }}>({alt.risk_score})</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
