@@ -73,7 +73,7 @@ function CustomEdge({
     const targetName = (data?.targetName as string) || "Unknown";
 
     const { selectedNodeId, selectedUpstream, selectedDownstream } = useSupplyChainStore();
-    
+
     // Determine if this specific edge is part of the highlighted path
     const isPathActive = selectedNodeId !== null;
     const isEdgeInSelectedPath = isPathActive && (
@@ -97,7 +97,7 @@ function CustomEdge({
             }
         }
     };
-    
+
     const edgeColorFromWeight = edgeWeightToGray(weight);
     const baseStroke =
         (typeof style.stroke === "string" && style.stroke.length > 0)
@@ -187,7 +187,7 @@ function SupplierNodeComponent({ data, id }: NodeProps) {
     const costScore = data.cost_score as number;
     const region = data.region as string;
     const baseRisk = data.baseRisk as number;
-    
+
     // Memoize risk calculation details for tooltip
     const riskDetails = useMemo(() => {
         return calculateDetailedSupplierRisk(region, baseRisk);
@@ -412,6 +412,8 @@ export default function NetworkGraph() {
         filteredNodes,
     } = useSupplyChainStore();
 
+    const [isMinimapOpen, setIsMinimapOpen] = useState(true);
+
     // Create a map of visible node IDs for quick lookup
     const visibleNodeIds = useMemo(() => {
         return new Set(filteredNodes.map((n) => n.id));
@@ -556,19 +558,46 @@ export default function NetworkGraph() {
             >
                 <Background gap={20} size={1} color="#ddd" />
                 <Controls />
-                <MiniMap
-                    nodeColor={(n) => {
-                        const risk = n.data?.risk_score as number | undefined;
-                        const tier = n.data?.tier as number | undefined;
-                        if (disabledNodeIds.has(n.id)) return "#999";
-                        if (risk && risk > 70) return "#FF3333";
-                        return TIER_COLORS[tier ?? 0] ?? "#FFF";
-                    }}
+                {isMinimapOpen && (
+                    <MiniMap
+                        nodeColor={(n) => {
+                            const risk = n.data?.risk_score as number | undefined;
+                            const tier = n.data?.tier as number | undefined;
+                            if (disabledNodeIds.has(n.id)) return "#999";
+                            if (risk && risk > 70) return "#FF3333";
+                            return TIER_COLORS[tier ?? 0] ?? "#FFF";
+                        }}
+                        style={{
+                            border: "3px solid #000",
+                            boxShadow: "4px 4px 0px 0px rgba(0,0,0,1)",
+                            bottom: 40,
+                        }}
+                        pannable
+                        zoomable
+                    />
+                )}
+                {/* Minimap Toggle Switch */}
+                <button
+                    onClick={() => setIsMinimapOpen(!isMinimapOpen)}
                     style={{
-                        border: "3px solid #000",
-                        boxShadow: "4px 4px 0px 0px rgba(0,0,0,1)",
+                        position: "absolute",
+                        bottom: 12,
+                        right: 12,
+                        zIndex: 10,
+                        background: "#000",
+                        color: "#FFF",
+                        border: "2px solid #000",
+                        padding: "6px 12px",
+                        fontSize: "10px",
+                        fontWeight: 900,
+                        fontFamily: "Roboto Mono, monospace",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        boxShadow: "2px 2px 0px rgba(0,0,0,0.5)",
                     }}
-                />
+                >
+                    {isMinimapOpen ? "Minimize Map" : "Maximize Map"}
+                </button>
             </ReactFlow>
         </div>
     );

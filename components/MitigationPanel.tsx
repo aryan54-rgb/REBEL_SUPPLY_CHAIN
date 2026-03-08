@@ -18,6 +18,7 @@ import {
 import { useSupplyChainStore } from "@/lib/store";
 import { TIER_LABELS } from "@/lib/mockData";
 import type { Mitigation } from "@/lib/algorithms";
+import { findAllAlternatives } from "@/lib/alternativeFinder";
 
 // ── Severity badge colors ──────────────────────────────────
 const SEVERITY_STYLES: Record<string, { bg: string; text: string }> = {
@@ -79,10 +80,10 @@ function MitigationCard({ m }: { m: Mitigation }) {
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {m.alternatives.map((alt) => (
-                            <div 
+                            <div
                                 key={alt.id}
                                 className="brutal-badge"
-                                style={{ 
+                                style={{
                                     background: alt.risk_score < 30 ? "#9BFF00" : "#FFDF00",
                                     color: "#000",
                                     fontSize: 9,
@@ -106,12 +107,21 @@ function MitigationCard({ m }: { m: Mitigation }) {
 
 export default function MitigationPanel() {
     const {
+        nodes,
+        edges,
         selectedNode,
         mitigations,
         cascadingRisk,
         selectedEfficiencyRatio,
         selectedDependencies,
     } = useSupplyChainStore();
+
+    const recommendedAlternatives = React.useMemo(() => {
+        if (!selectedNode || selectedNode.risk_score <= 30) return [];
+        const result = findAllAlternatives(new Set([selectedNode.id]), nodes, edges);
+        if (result.length > 0) return result[0].alternatives;
+        return [];
+    }, [selectedNode, nodes, edges]);
 
     // ── Empty state ──────────────────────────────────────────
     if (!selectedNode) {
@@ -310,6 +320,179 @@ export default function MitigationPanel() {
                             </div>
                         ))}
                     </div>
+                </div>
+            )}
+
+            {/* ── Rich Alternative Recommendations ──────────────── */}
+            {recommendedAlternatives.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                    <h3
+                        style={{
+                            fontSize: 13,
+                            fontWeight: 900,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            marginBottom: 10,
+                            borderBottom: "3px solid #000",
+                            paddingBottom: 6,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6
+                        }}
+                    >
+                        <Zap size={16} /> Replacement Recommendations
+                    </h3>
+
+                    {recommendedAlternatives.map((candidate, idx) => (
+                        <div
+                            key={candidate.node.id}
+                            className="brutal-card"
+                            style={{
+                                padding: "8px 10px",
+                                marginBottom: 6,
+                                borderLeftWidth: 5,
+                                borderLeftColor:
+                                    idx === 0
+                                        ? "#9BFF00"
+                                        : idx === 1
+                                            ? "#FFDF00"
+                                            : "#ddd",
+                                position: "relative",
+                            }}
+                        >
+                            {/* Best Pick badge */}
+                            {idx === 0 && (
+                                <span
+                                    style={{
+                                        position: "absolute",
+                                        top: -6,
+                                        right: 8,
+                                        background: "#9BFF00",
+                                        color: "#000",
+                                        fontSize: 8,
+                                        fontWeight: 900,
+                                        padding: "2px 6px",
+                                        border: "2px solid #000",
+                                        textTransform: "uppercase",
+                                    }}
+                                >
+                                    ★ Best Pick
+                                </span>
+                            )}
+
+                            {/* Node info */}
+                            <div
+                                style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    marginBottom: 4,
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        fontSize: 11,
+                                        fontWeight: 800,
+                                    }}
+                                >
+                                    {candidate.node.name}
+                                </span>
+                                <span
+                                    className="brutal-badge"
+                                    style={{
+                                        fontSize: 10,
+                                        fontWeight: 900,
+                                        fontFamily: "Roboto Mono",
+                                        background: "#000",
+                                        color: "#9BFF00",
+                                    }}
+                                >
+                                    Score: {candidate.score}
+                                </span>
+                            </div>
+
+                            {/* Region & country */}
+                            <div
+                                style={{
+                                    fontSize: 9,
+                                    fontFamily: "Roboto Mono",
+                                    opacity: 0.6,
+                                    marginBottom: 6,
+                                }}
+                            >
+                                {candidate.node.country} · {candidate.node.region}
+                                {candidate.regionDiversified && (
+                                    <span
+                                        style={{
+                                            color: "#9BFF00",
+                                            fontWeight: 800,
+                                            marginLeft: 4,
+                                            background: "#000",
+                                            padding: "0 3px",
+                                        }}
+                                    >
+                                        +DIV
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Cost-Benefit Grid */}
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr 1fr",
+                                    gap: 4,
+                                    fontSize: 9,
+                                    fontFamily: "Roboto Mono",
+                                }}
+                            >
+                                <div>
+                                    <span style={{ opacity: 0.5 }}>Risk Δ: </span>
+                                    <span
+                                        style={{
+                                            fontWeight: 800,
+                                            color:
+                                                candidate.riskReduction > 0
+                                                    ? "#9BFF00"
+                                                    : "#FF3333",
+                                        }}
+                                    >
+                                        {candidate.riskReduction > 0
+                                            ? `-${candidate.riskReduction}`
+                                            : `+${Math.abs(candidate.riskReduction)}`}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style={{ opacity: 0.5 }}>Cost Δ: </span>
+                                    <span
+                                        style={{
+                                            fontWeight: 800,
+                                            color:
+                                                candidate.costDelta >= 0
+                                                    ? "#000"
+                                                    : "#FF3333",
+                                        }}
+                                    >
+                                        {candidate.costDelta >= 0
+                                            ? `+${candidate.costDelta}`
+                                            : `${candidate.costDelta}`}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style={{ opacity: 0.5 }}>Stability: </span>
+                                    <span style={{ fontWeight: 800 }}>
+                                        {candidate.node.financial_stability}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style={{ opacity: 0.5 }}>Risk: </span>
+                                    <span style={{ fontWeight: 800 }}>
+                                        {candidate.node.risk_score}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 
